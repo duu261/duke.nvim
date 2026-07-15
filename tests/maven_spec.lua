@@ -31,6 +31,7 @@ describe("Maven scaffolding", function()
       java_version = "21",
       env = { JAVA_HOME = "/jdk/21" },
       version = "1.0-SNAPSHOT",
+      wrapper = false,
       archetype = {
         group_id = "org.apache.maven.archetypes",
         artifact_id = "maven-archetype-quickstart",
@@ -130,5 +131,132 @@ describe("Maven scaffolding", function()
 
     assert.matches("target already exists", callback_error)
     assert.equals("keep", vim.fn.readfile(vim.fs.joinpath(cwd, "demo-api", "sentinel"))[1])
+  end)
+
+  it("generates an optional Maven Wrapper before promotion", function()
+    local cwd = temporary_directory()
+    local runs = 0
+    local project_dir
+    local staged_project
+    package.loaded["java_scaffold.process"] = {
+      run = function(command, args, process_options, callback)
+        runs = runs + 1
+        if runs == 1 then
+          local output = vim.iter(args):find(function(arg)
+            return arg:match("^-DoutputDirectory=")
+          end)
+          local staging = output:match("^%-DoutputDirectory=(.+)$")
+          local generated = vim.fs.joinpath(staging, "demo-api")
+          staged_project = generated
+          vim.fn.mkdir(generated, "p")
+          vim.fn.writefile({ "<project/>" }, vim.fs.joinpath(generated, "pom.xml"))
+          callback({ code = 0, stdout = "", stderr = "" })
+          return
+        end
+
+        assert.equals("mvn", command)
+        assert.same({ "-B", "wrapper:wrapper", "-Dtype=only-script" }, args)
+        assert.equals(staged_project, process_options.cwd)
+        assert.equals("/jdk/21", process_options.env.JAVA_HOME)
+        vim.fn.writefile({ "#!/bin/sh" }, vim.fs.joinpath(process_options.cwd, "mvnw"))
+        vim.fn.writefile({ "@echo off" }, vim.fs.joinpath(process_options.cwd, "mvnw.cmd"))
+        local wrapper_dir = vim.fs.joinpath(process_options.cwd, ".mvn", "wrapper")
+        vim.fn.mkdir(wrapper_dir, "p")
+        vim.fn.writefile(
+          { "distributionUrl=https://example.invalid/maven.zip" },
+          vim.fs.joinpath(wrapper_dir, "maven-wrapper.properties")
+        )
+        callback({ code = 0, stdout = "", stderr = "" })
+      end,
+    }
+    local opts = create_options(cwd)
+    opts.wrapper = true
+
+    maven.create(opts, function(err, path)
+      assert.is_nil(err)
+      project_dir = path
+    end)
+
+    assert.equals(2, runs)
+    assert.equals(1, vim.fn.filereadable(vim.fs.joinpath(project_dir, "mvnw")))
+    assert.equals(1, vim.fn.filereadable(vim.fs.joinpath(project_dir, "mvnw.cmd")))
+    assert.equals(
+      1,
+      vim.fn.filereadable(
+        vim.fs.joinpath(project_dir, ".mvn", "wrapper", "maven-wrapper.properties")
+      )
+    )
+  end)
+
+  it("aborts promotion when Maven Wrapper generation fails", function()
+    local cwd = temporary_directory()
+    local runs = 0
+    local callback_error
+    package.loaded["java_scaffold.process"] = {
+      run = function(_, args, _, callback)
+        runs = runs + 1
+        if runs == 1 then
+          local output = vim.iter(args):find(function(arg)
+            return arg:match("^-DoutputDirectory=")
+          end)
+          local staging = output:match("^%-DoutputDirectory=(.+)$")
+          local generated = vim.fs.joinpath(staging, "demo-api")
+          vim.fn.mkdir(generated, "p")
+          vim.fn.writefile({ "<project/>" }, vim.fs.joinpath(generated, "pom.xml"))
+          callback({ code = 0, stdout = "", stderr = "" })
+          return
+        end
+        callback({ code = 1, stdout = "", stderr = "wrapper failed" })
+      end,
+      detail = function(result)
+        return result.stderr
+      end,
+    }
+    local opts = create_options(cwd)
+    opts.wrapper = true
+
+    maven.create(opts, function(err)
+      callback_error = err
+    end)
+
+    assert.equals(2, runs)
+    assert.matches("Maven Wrapper generation failed: wrapper failed", callback_error)
+    assert.is_nil(vim.uv.fs_stat(vim.fs.joinpath(cwd, "demo-api")))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+  end)
+
+  it("rejects incomplete Maven Wrapper output", function()
+    local cwd = temporary_directory()
+    local runs = 0
+    local callback_error
+    package.loaded["java_scaffold.process"] = {
+      run = function(_, args, process_options, callback)
+        runs = runs + 1
+        if runs == 1 then
+          local output = vim.iter(args):find(function(arg)
+            return arg:match("^-DoutputDirectory=")
+          end)
+          local staging = output:match("^%-DoutputDirectory=(.+)$")
+          local generated = vim.fs.joinpath(staging, "demo-api")
+          vim.fn.mkdir(generated, "p")
+          vim.fn.writefile({ "<project/>" }, vim.fs.joinpath(generated, "pom.xml"))
+          callback({ code = 0, stdout = "", stderr = "" })
+          return
+        end
+        vim.fn.writefile({ "#!/bin/sh" }, vim.fs.joinpath(process_options.cwd, "mvnw"))
+        vim.fn.writefile({ "@echo off" }, vim.fs.joinpath(process_options.cwd, "mvnw.cmd"))
+        callback({ code = 0, stdout = "", stderr = "" })
+      end,
+    }
+    local opts = create_options(cwd)
+    opts.wrapper = true
+
+    maven.create(opts, function(err)
+      callback_error = err
+    end)
+
+    assert.equals(2, runs)
+    assert.matches("Maven Wrapper output missing", callback_error)
+    assert.is_nil(vim.uv.fs_stat(vim.fs.joinpath(cwd, "demo-api")))
   end)
 end)

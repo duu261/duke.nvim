@@ -104,14 +104,24 @@ local function usable_home(path)
     and vim.fn.executable(vim.fs.joinpath(path, "bin", "java")) == 1
 end
 
+function M.home_version(path)
+  if not usable_home(path) then
+    return nil
+  end
+  return version_from(vim.fs.joinpath(path, "bin", "java"))
+end
+
 function M.discover_homes(configured_homes)
   local homes = {}
   local function add(path, declared_version)
-    if not usable_home(path) then
+    local version = M.home_version(path)
+    if not version then
       return
     end
-    local version = declared_version or version_from(vim.fs.joinpath(path, "bin", "java"))
-    version = version and tostring(version) or nil
+    version = tostring(version)
+    if declared_version and tostring(declared_version) ~= version then
+      return
+    end
     if version and version:match("^%d+$") and not homes[version] then
       homes[version] = path
     end

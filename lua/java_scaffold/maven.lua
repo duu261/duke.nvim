@@ -58,6 +58,16 @@ function M.build_args(opts)
   }
 end
 
+local wrapper_files = {
+  "mvnw",
+  "mvnw.cmd",
+  ".mvn/wrapper/maven-wrapper.properties",
+}
+
+local function wrapper_args()
+  return { "-B", "wrapper:wrapper", "-Dtype=only-script" }
+end
+
 function M.create(opts, callback)
   local validation_error = M.validate(opts.group_id, opts.artifact_id)
   if validation_error then
@@ -80,30 +90,62 @@ function M.create(opts, callback)
 
   local staged_project = vim.fs.joinpath(staging, opts.artifact_id)
   local args = M.build_args(vim.tbl_extend("force", opts, { output_directory = staging }))
+  local process = require("java_scaffold.process")
 
-  require("java_scaffold.process").run(
+  local function abort(message)
+    fs.cleanup(staging)
+    callback(message)
+  end
+
+  local function promote()
+    local promoted, promote_error = fs.promote(staged_project, target)
+    fs.cleanup(staging)
+    if not promoted then
+      callback(promote_error)
+      return
+    end
+    callback(nil, target)
+  end
+
+  local function generate_wrapper()
+    process.run(
+      opts.command,
+      wrapper_args(),
+      { cwd = staged_project, timeout = opts.timeout, env = opts.env },
+      function(result)
+        if result.code ~= 0 then
+          abort("Maven Wrapper generation failed: " .. process.detail(result))
+          return
+        end
+        for _, relative in ipairs(wrapper_files) do
+          if not vim.uv.fs_stat(vim.fs.joinpath(staged_project, relative)) then
+            abort("Maven Wrapper output missing " .. relative)
+            return
+          end
+        end
+        promote()
+      end
+    )
+  end
+
+  process.run(
     opts.command,
     args,
     { cwd = opts.cwd, timeout = opts.timeout, env = opts.env },
     function(result)
       if result.code ~= 0 then
-        fs.cleanup(staging)
-        local detail = require("java_scaffold.process").detail(result)
-        callback("Maven project creation failed: " .. detail)
+        abort("Maven project creation failed: " .. process.detail(result))
         return
       end
       if not vim.uv.fs_stat(vim.fs.joinpath(staged_project, "pom.xml")) then
-        fs.cleanup(staging)
-        callback("Maven exited successfully but no pom.xml was created")
+        abort("Maven exited successfully but no pom.xml was created")
         return
       end
-      local promoted, promote_error = fs.promote(staged_project, target)
-      fs.cleanup(staging)
-      if not promoted then
-        callback(promote_error)
+      if opts.wrapper then
+        generate_wrapper()
         return
       end
-      callback(nil, target)
+      promote()
     end
   )
 end

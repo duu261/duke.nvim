@@ -33,6 +33,23 @@ function M.check()
   else
     vim.health.error("active Java version could not be detected")
   end
+  local configured_versions = vim.tbl_keys(config.java_homes)
+  table.sort(configured_versions, function(left, right)
+    return tonumber(left) < tonumber(right)
+  end)
+  for _, declared in ipairs(configured_versions) do
+    local home = config.java_homes[declared]
+    local actual = java.home_version(home)
+    if not actual then
+      vim.health.error("configured java_homes[" .. declared .. "] is not a usable JDK: " .. home)
+    elseif actual ~= declared then
+      vim.health.error(
+        "configured java_homes[" .. declared .. "] points to Java " .. actual .. ": " .. home
+      )
+    else
+      vim.health.ok("configured Java " .. declared .. " home verified: " .. home)
+    end
+  end
   local versions = java.installed(config.java_versions, config.java_homes)
   if #versions > 0 then
     vim.health.ok("available project Java versions: " .. table.concat(versions, ", "))
@@ -101,9 +118,9 @@ function M.check()
 
   local jdtls_ok = pcall(require, "jdtls")
   if jdtls_ok then
-    vim.health.ok("nvim-jdtls available; opening generated Java source can start language tooling")
+    vim.health.ok("nvim-jdtls module available")
   else
-    vim.health.warn("nvim-jdtls absent; scaffolding works without Java language tooling")
+    vim.health.warn("nvim-jdtls module absent; scaffolding works without it")
   end
 end
 

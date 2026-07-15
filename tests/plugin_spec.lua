@@ -5,6 +5,11 @@ describe("plugin surface", function()
     vim.cmd("runtime plugin/java-scaffold.lua")
   end)
 
+  after_each(function()
+    package.loaded["java_scaffold.config"] = nil
+    package.loaded["java_scaffold.java"] = nil
+  end)
+
   it("registers lazy user commands", function()
     assert.equals(2, vim.fn.exists(":JavaScaffoldMaven"))
     assert.equals(2, vim.fn.exists(":JavaScaffoldGradle"))
@@ -21,6 +26,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.new_spring)
     assert.is_function(plugin.add_dependency)
     assert.is_function(plugin.java_runtimes)
+    assert.is_function(plugin.select_runtime)
   end)
 
   it("caches public Java runtime discovery", function()
@@ -52,8 +58,49 @@ describe("plugin surface", function()
 
     plugin.java_runtimes({ refresh = true })
     assert.equals(2, discovery_count)
+  end)
 
-    package.loaded["java_scaffold.config"] = nil
-    package.loaded["java_scaffold.java"] = nil
+  it("selects an eligible public Java runtime", function()
+    local active = "23"
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.config"] = {
+      get = function()
+        return { java_homes = {} }
+      end,
+    }
+    package.loaded["java_scaffold.java"] = {
+      active = function()
+        return active
+      end,
+      discover_homes = function()
+        return {
+          ["17"] = "/jdk/17",
+          ["21"] = "/jdk/21",
+          ["23"] = "/jdk/23",
+          ["26"] = "/jdk/26",
+        }
+      end,
+    }
+
+    local plugin = require("java_scaffold")
+
+    assert.same({
+      version = "23",
+      home = "/jdk/23",
+      executable = "/jdk/23/bin/java",
+    }, plugin.select_runtime({ min_version = 21, prefer_active = true }))
+    assert.same({
+      version = "21",
+      home = "/jdk/21",
+      executable = "/jdk/21/bin/java",
+    }, plugin.select_runtime({ min_version = 21, prefer_active = false }))
+    active = "17"
+    plugin.java_runtimes({ refresh = true })
+    assert.same({
+      version = "21",
+      home = "/jdk/21",
+      executable = "/jdk/21/bin/java",
+    }, plugin.select_runtime({ min_version = 21, prefer_active = true }))
+    assert.is_nil(plugin.select_runtime({ min_version = 27 }))
   end)
 end)

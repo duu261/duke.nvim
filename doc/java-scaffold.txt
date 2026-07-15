@@ -35,6 +35,7 @@ Telescope are needed only by their respective workflows.
     maven = {
       command = "mvn",
       runner_java_version = "auto",
+      wrapper = false,
       project_version = "1.0-SNAPSHOT",
       timeout = 180000,
       archetype = {
@@ -95,6 +96,20 @@ java_runtimes([{opts}])                *java-scaffold.java_runtimes()*
     maps Java major versions to JDK homes. Discovery stays cached until
     setup() runs or opts.refresh is true. Every call returns a deep copy.
 
+select_runtime([{opts}])              *java-scaffold.select_runtime()*
+    Select one discovered JDK. opts.min_version sets the minimum Java major
+    version and defaults to 0. opts.prefer_active defaults to true. Active
+    Java is selected when it is eligible and has a discovered home;
+    otherwise, the lowest eligible version is selected. Return nil when no
+    eligible JDK home exists. A successful result has this shape:
+>
+      {
+        version = "23",
+        home = "/path/to/jdk-23",
+        executable = "/path/to/jdk-23/bin/java",
+      }
+<
+
 Successful creation emits User JavaScaffoldProjectCreated. Event data
 contains project_dir and entry_file. Handoff arguments may contain {project}
 and {file}; without placeholders, the project path is appended.
@@ -105,7 +120,8 @@ and {file}; without placeholders, the project path is appended.
                                                     *:JavaScaffoldMaven*
 :JavaScaffoldMaven
     Prompt for Maven coordinates and Java version. Generate a Maven quickstart
-    project under the current working directory.
+    project under the current working directory. When maven.wrapper is true,
+    generate mvnw before promotion and require all Maven Wrapper files.
 
                                                     *:JavaScaffoldSpring*
 :JavaScaffoldSpring
@@ -139,7 +155,8 @@ Run :checkhealth java_scaffold directly when the plugin is already loaded.
 java_version selects the project compiler or toolchain target; "auto" uses
 active Java. Maven and Gradle choices include active Java, JDK<version>
 environment variables, java_versions, java_homes, and common JDK install
-directories.
+directories. A configured home is accepted only when bin/java reports the
+version declared by its java_homes key.
 
 Each build system has a separate runner_java_version that defaults to active
 Java. This allows a modern Gradle JVM to target Java 8 or 11. Known runner

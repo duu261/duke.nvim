@@ -10,6 +10,7 @@ local defaults = {
   maven = {
     command = "mvn",
     runner_java_version = "auto",
+    wrapper = false,
     project_version = "1.0-SNAPSHOT",
     timeout = 180000,
     archetype = {
@@ -142,6 +143,10 @@ local function validate(opts)
   if not non_empty_string(opts.maven.command) then
     warn("maven.command", "a non-empty string")
     opts.maven.command = defaults.maven.command
+  end
+  if type(opts.maven.wrapper) ~= "boolean" then
+    warn("maven.wrapper", "a boolean")
+    opts.maven.wrapper = defaults.maven.wrapper
   end
   if
     not non_empty_string(opts.maven.runner_java_version)

@@ -101,6 +101,47 @@ function M.java_runtimes(opts)
   return vim.deepcopy(runtime_cache)
 end
 
+function M.select_runtime(opts)
+  if opts ~= nil and type(opts) ~= "table" then
+    return nil
+  end
+  opts = opts or {}
+  local minimum = opts.min_version == nil and 0 or tonumber(opts.min_version)
+  if not minimum or minimum < 0 or minimum % 1 ~= 0 then
+    return nil
+  end
+
+  local runtimes = M.java_runtimes()
+  local function selected(version)
+    version = version and tostring(version) or nil
+    local home = version and runtimes.homes[version] or nil
+    if not home or tonumber(version) < minimum then
+      return nil
+    end
+    return {
+      version = version,
+      home = home,
+      executable = vim.fs.joinpath(home, "bin", "java"),
+    }
+  end
+
+  if opts.prefer_active ~= false then
+    local active = selected(runtimes.active)
+    if active then
+      return active
+    end
+  end
+
+  local candidate
+  for version in pairs(runtimes.homes) do
+    local numeric = tonumber(version)
+    if numeric and numeric >= minimum and (not candidate or numeric < tonumber(candidate)) then
+      candidate = tostring(version)
+    end
+  end
+  return selected(candidate)
+end
+
 function M.new_maven()
   local config = require("java_scaffold.config").get()
   prompt_coordinates(config.group_id, config.artifact_id, function(group_id, artifact_id)
@@ -136,6 +177,7 @@ function M.new_maven()
           group_id = group_id,
           artifact_id = artifact_id,
           version = config.maven.project_version,
+          wrapper = config.maven.wrapper,
           java_version = java_version,
           archetype = config.maven.archetype,
           timeout = config.maven.timeout,

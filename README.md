@@ -49,6 +49,7 @@ require("java_scaffold").setup({
   maven = {
     command = "mvn",
     runner_java_version = "auto", -- active Java; separate from project target
+    wrapper = false, -- generate Maven Wrapper before project promotion
     project_version = "1.0-SNAPSHOT",
     timeout = 180000,
     archetype = {
@@ -88,7 +89,7 @@ require("java_scaffold").setup({
 })
 ```
 
-`java_version = "auto"` selects the project compiler/toolchain target and defaults to the active Java version. Maven and Gradle choices include active Java, `JDK<version>` environment variables, configured homes, and JDKs discovered under common Linux, macOS, SDKMAN, asdf, and Maven directories.
+`java_version = "auto"` selects the project compiler/toolchain target and defaults to the active Java version. Maven and Gradle choices include active Java, `JDK<version>` environment variables, configured homes, and JDKs discovered under common Linux, macOS, SDKMAN, asdf, and Maven directories. A configured home is accepted only when its `bin/java -version` output matches the configured version key.
 
 Build JVM selection stays independent through each workflow's `runner_java_version`. This lets Gradle run on a modern JVM while targeting Java 8 or 11. Known runner homes become scoped `JAVA_HOME` and `PATH` values; global shell state stays unchanged. Wrappers may override `JAVA_HOME`, so health checks and project creation report the detected runner Java.
 
@@ -109,9 +110,21 @@ Spring choices come from Initializr metadata for the selected Boot version. Unsu
 
 Results stay cached until `setup()` runs or `java_runtimes({ refresh = true })` requests fresh discovery. Each call returns a deep copy, so caller changes cannot mutate the cache.
 
+`require("java_scaffold").select_runtime(opts)` selects one discovered JDK and returns its version, home, and Java executable:
+
+```lua
+local runtime = require("java_scaffold").select_runtime({
+  min_version = 21,
+  prefer_active = true,
+})
+-- { version = "23", home = "/path/to/jdk-23", executable = "/path/to/jdk-23/bin/java" }
+```
+
+`prefer_active` defaults to `true`. When active Java is unavailable or below `min_version`, the lowest eligible discovered version is selected. The function returns `nil` when no eligible JDK home exists.
+
 ## Project coverage
 
-- Maven quickstart: conventional console project and tests
+- Maven quickstart: conventional console project and tests; optional Maven Wrapper generation
 - Gradle: Java application, library, or Gradle plugin; Kotlin DSL; JUnit 4 for Java 8/11 and Jupiter for 17+
 - Spring Boot: Boot versions, Java versions, and dependencies supplied by Initializr metadata
 - Existing Spring project: safe direct dependency insertion into nearest root `pom.xml`
@@ -128,6 +141,8 @@ Results stay cached until `setup()` runs or `java_runtimes({ refresh = true })` 
 | `:JavaScaffoldHealth` | Load the plugin and run its health check |
 
 Creation runs in the current working directory. Each generator builds inside a private staging directory, validates expected build files, then promotes the finished project without deleting an existing target. Wizards prompt for coordinates and Java, plus project type for Gradle or dependencies for Spring.
+
+With `maven.wrapper = true`, Maven runs `wrapper:wrapper` inside staging. Promotion requires `mvnw`, `mvnw.cmd`, and `.mvn/wrapper/maven-wrapper.properties`.
 
 Without handoff, the plugin opens generated application source when available. This triggers the existing Java filetype or JDTLS setup; the plugin does not manage JDTLS. Successful creation emits `User JavaScaffoldProjectCreated` with `data.project_dir` and `data.entry_file`.
 
@@ -157,7 +172,7 @@ Successful Initializr responses are cached under `stdpath("cache")/java-scaffold
 
 V1 inserts only Initializr dependencies representable by one normal Maven `<dependency>` block. Entries requiring a BOM import, custom repository, or annotation-processor/plugin wiring are hidden because direct insertion would create a broken build. They remain available during Spring project creation, where Initializr generates the required Maven configuration.
 
-Run `:checkhealth java_scaffold` when something fails.
+Run `:checkhealth java_scaffold` when something fails. Health checks verify configured JDK versions and report only nvim-jdtls module availability.
 
 ## Development
 

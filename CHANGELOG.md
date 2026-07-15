@@ -16,3 +16,6 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Configurable post-create project handoff.
 - Transactional project staging and target-safe promotion.
 - Generated Java entry opening, creation event, and handoff placeholders.
+- Cached Java runtime discovery and minimum-version runtime selection.
+- Optional Maven Wrapper generation before project promotion.
+- Configured JDK-home version verification and precise nvim-jdtls health text.
