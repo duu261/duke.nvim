@@ -170,8 +170,19 @@ Spring choices come from Initializr metadata for the selected Boot version.
 6. OFFLINE METADATA                            *java-scaffold-offline*
 
 Initializr project metadata and Boot-version dependency coordinates are
-cached under stdpath("cache")/java-scaffold.nvim after successful requests.
-Fetch failures use those files. Cached data supports dependency insertion
-offline; new project archives still require network access.
+cached under stdpath("cache")/java-scaffold.nvim after successful requests,
+separately for each configured Initializr URL. Fetch failures use those
+files. Cached data supports dependency insertion offline; new project
+archives still require network access.
+
+Initializr may stop serving dependency catalogs for old Spring Boot
+versions. Insertion then requires a catalog for that version cached earlier
+from the same configured Initializr URL. Without that cache, the Initializr
+rejection is reported. Upgrade the project or configure an Initializr server
+that still supplies the catalog.
+
+The plugin does not add unsupported Boot versions to new-project choices or
+bypass Initializr compatibility rules. Old-version lookup happens only when
+:JavaScaffoldAddDependency reads that version from an existing pom.xml.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

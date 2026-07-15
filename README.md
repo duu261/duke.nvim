@@ -166,7 +166,11 @@ When handoff is disabled or fails, project opens in current Neovim.
 
 ## Offline metadata
 
-Successful Initializr responses are cached under `stdpath("cache")/java-scaffold.nvim`. Fetch failures fall back to cached project metadata and Boot-version dependency coordinates. Project creation still needs network access; cached coordinates keep supported POM insertion working offline.
+Successful Initializr responses are cached under `stdpath("cache")/java-scaffold.nvim`, separately for each configured Initializr URL. Fetch failures fall back to cached project metadata and Boot-version dependency coordinates. Project creation still needs network access; cached coordinates keep supported POM insertion working offline.
+
+Initializr may stop serving dependency catalogs for old Spring Boot versions. Insertion for such a project requires a catalog for that Boot version cached earlier from the same configured Initializr URL. Without that cache, the Initializr rejection is reported. Upgrade the project or configure an Initializr server that still supplies the catalog.
+
+The plugin does not add unsupported Boot versions to new-project choices or bypass Initializr compatibility rules. Old-version lookup happens only when `:JavaScaffoldAddDependency` reads that version from an existing `pom.xml`.
 
 ## Dependency insertion limits
 

@@ -30,6 +30,42 @@ local function read_cache(path, validator)
   return value
 end
 
+local function non_empty_string(value)
+  return type(value) == "string" and value ~= ""
+end
+
+local function optional_string(value)
+  return value == nil or type(value) == "string"
+end
+
+local function list_matches(value, predicate)
+  if not vim.islist(value) then
+    return false
+  end
+  for _, item in ipairs(value) do
+    if not predicate(item) then
+      return false
+    end
+  end
+  return true
+end
+
+local function response_error(raw)
+  if not non_empty_string(raw) then
+    return nil
+  end
+  local value = decode(raw)
+  if type(value) ~= "table" then
+    return nil
+  end
+  for _, key in ipairs({ "message", "error" }) do
+    if non_empty_string(value[key]) then
+      return value[key]
+    end
+  end
+  return nil
+end
+
 local function write_cache(path, raw)
   local parent = vim.fs.dirname(path)
   if vim.fn.mkdir(parent, "p") == 0 and vim.fn.isdirectory(parent) ~= 1 then
@@ -77,7 +113,12 @@ function M.http_get(url, callback)
     if result.code ~= 0 then
       local stderr = vim.trim(result.stderr or "")
       local stdout = vim.trim(result.stdout or "")
-      callback(stderr ~= "" and stderr or stdout ~= "" and stdout or "HTTP request failed")
+      callback(
+        response_error(stdout)
+          or stderr ~= "" and stderr
+          or stdout ~= "" and stdout
+          or "HTTP request failed"
+      )
       return
     end
     callback(nil, result.stdout)
@@ -108,22 +149,72 @@ function M.fetch_cached(url, cache_path, runner, callback, validator)
 end
 
 function M.is_client(value)
+  local function choice(item)
+    return type(item) == "table"
+      and non_empty_string(item.id)
+      and (item.name == nil or non_empty_string(item.name))
+  end
+  local function section(item)
+    return type(item) == "table"
+      and non_empty_string(item.default)
+      and list_matches(item.values, choice)
+  end
+  local function dependency(item)
+    return type(item) == "table"
+      and non_empty_string(item.id)
+      and non_empty_string(item.name)
+      and optional_string(item.description)
+  end
+  local function group(item)
+    return type(item) == "table"
+      and (item.name == nil or non_empty_string(item.name))
+      and list_matches(item.values, dependency)
+  end
+
   return type(value) == "table"
-    and type(value.bootVersion) == "table"
-    and type(value.javaVersion) == "table"
+    and section(value.bootVersion)
+    and section(value.javaVersion)
     and type(value.dependencies) == "table"
+    and list_matches(value.dependencies.values, group)
 end
 
 function M.is_catalog(value)
-  return type(value) == "table" and type(value.dependencies) == "table"
+  if
+    type(value) ~= "table"
+    or type(value.dependencies) ~= "table"
+    or vim.islist(value.dependencies)
+  then
+    return false
+  end
+  for id, dependency in pairs(value.dependencies) do
+    if
+      not non_empty_string(id)
+      or type(dependency) ~= "table"
+      or not non_empty_string(dependency.groupId)
+      or not non_empty_string(dependency.artifactId)
+    then
+      return false
+    end
+    for _, key in ipairs({ "version", "scope", "bom", "repository" }) do
+      if dependency[key] ~= nil and not non_empty_string(dependency[key]) then
+        return false
+      end
+    end
+  end
+  return true
 end
 
-function M.cache_path(kind, version)
+function M.cache_path(kind, version, url)
   local filename = kind
   if version then
     filename = filename .. "-" .. version:gsub("[^%w_.-]", "_")
   end
-  return vim.fs.joinpath(vim.fn.stdpath("cache"), "java-scaffold.nvim", filename .. ".json")
+  return vim.fs.joinpath(
+    vim.fn.stdpath("cache"),
+    "java-scaffold.nvim",
+    vim.fn.sha256(url),
+    filename .. ".json"
+  )
 end
 
 function M.flatten_dependencies(client)

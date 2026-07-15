@@ -258,7 +258,7 @@ local function fetch_client(callback)
   local config = require("java_scaffold.config").get()
   require("java_scaffold.metadata").fetch_cached(
     config.spring.metadata_url,
-    require("java_scaffold.metadata").cache_path("metadata"),
+    require("java_scaffold.metadata").cache_path("metadata", nil, config.spring.metadata_url),
     nil,
     callback,
     require("java_scaffold.metadata").is_client
@@ -270,7 +270,11 @@ local function fetch_catalog(boot_version, callback)
   local url = config.spring.dependencies_url .. "?bootVersion=" .. vim.uri_encode(boot_version)
   require("java_scaffold.metadata").fetch_cached(
     url,
-    require("java_scaffold.metadata").cache_path("dependencies", boot_version),
+    require("java_scaffold.metadata").cache_path(
+      "dependencies",
+      boot_version,
+      config.spring.dependencies_url
+    ),
     nil,
     callback,
     require("java_scaffold.metadata").is_catalog

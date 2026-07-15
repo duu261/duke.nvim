@@ -72,9 +72,43 @@ describe("Initializr metadata", function()
     vim.fn.delete(cache)
   end)
 
+  it("reports Initializr JSON error messages", function()
+    local saved_process = package.loaded["java_scaffold.process"]
+    local received_error
+    local expected_error = "Invalid Spring Boot version '3.3.4', "
+      .. "Spring Boot compatibility range is >=4.0.0"
+    package.loaded["java_scaffold.process"] = {
+      run = function(_, _, _, callback)
+        callback({
+          code = 22,
+          stderr = "curl: (22) The requested URL returned error: 400",
+          stdout = vim.json.encode({
+            status = 400,
+            error = "Bad Request",
+            message = expected_error,
+          }),
+        })
+      end,
+    }
+
+    metadata.http_get("https://start.spring.io/dependencies?bootVersion=3.3.4", function(err)
+      received_error = err
+    end)
+    package.loaded["java_scaffold.process"] = saved_process
+
+    assert.equals(expected_error, received_error)
+  end)
+
   it("rejects invalid remote structure without replacing valid cache", function()
     local cache = vim.fn.tempname()
-    local cached_json = '{"dependencies":{"web":{}}}'
+    local cached_json = vim.json.encode({
+      dependencies = {
+        web = {
+          groupId = "org.springframework.boot",
+          artifactId = "spring-boot-starter-webmvc",
+        },
+      },
+    })
     vim.fn.writefile({ cached_json }, cache)
     local result
 
@@ -92,6 +126,63 @@ describe("Initializr metadata", function()
     assert.is_table(result.value.dependencies)
     assert.equals(cached_json, table.concat(vim.fn.readfile(cache), "\n"))
     vim.fn.delete(cache)
+  end)
+
+  it("rejects deeply malformed client metadata", function()
+    local valid_client = {
+      bootVersion = { default = "4.0.0", values = { { id = "4.0.0" } } },
+      javaVersion = { default = "17", values = { { id = "17" } } },
+      dependencies = {
+        values = {
+          {
+            name = "Web",
+            values = { { id = "web", name = "Spring Web", description = "Web applications" } },
+          },
+        },
+      },
+    }
+    assert.is_true(metadata.is_client(valid_client))
+
+    local malformed_group = vim.deepcopy(valid_client)
+    malformed_group.dependencies.values[1] = "Web"
+    assert.is_false(metadata.is_client(malformed_group))
+
+    local malformed_dependency = vim.deepcopy(valid_client)
+    malformed_dependency.dependencies.values[1].values[1] = "web"
+    assert.is_false(metadata.is_client(malformed_dependency))
+
+    local malformed_version = vim.deepcopy(valid_client)
+    malformed_version.bootVersion.values[1].id = 4
+    assert.is_false(metadata.is_client(malformed_version))
+  end)
+
+  it("rejects deeply malformed dependency catalogs", function()
+    assert.is_true(metadata.is_catalog({
+      dependencies = {
+        web = {
+          groupId = "org.springframework.boot",
+          artifactId = "spring-boot-starter-webmvc",
+        },
+      },
+    }))
+    assert.is_false(metadata.is_catalog({ dependencies = { web = "spring-boot-starter-webmvc" } }))
+    assert.is_false(metadata.is_catalog({
+      dependencies = {
+        web = {
+          groupId = "org.springframework.boot",
+          artifactId = 42,
+        },
+      },
+    }))
+  end)
+
+  it("namespaces cache paths by Initializr URL", function()
+    local standard = metadata.cache_path("metadata", nil, "https://start.spring.io")
+    local custom = metadata.cache_path("metadata", nil, "https://initializr.example.test")
+
+    assert.not_equals(standard, custom)
+    assert.is_truthy(standard:find(vim.fn.sha256("https://start.spring.io"), 1, true))
+    assert.is_truthy(custom:find(vim.fn.sha256("https://initializr.example.test"), 1, true))
   end)
 
   it("resolves selected dependency IDs through the version catalog", function()
