@@ -303,6 +303,8 @@ function M.setup(opts)
   options = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts)
   if type(opts.maven) == "table" and opts.maven.archetypes ~= nil then
     options.maven.archetypes = vim.deepcopy(opts.maven.archetypes)
+  elseif type(opts.maven) == "table" and type(opts.maven.archetype) == "table" then
+    options.maven.archetypes = { vim.deepcopy(opts.maven.archetype) }
   end
   if type(opts.gradle) == "table" then
     for _, key in ipairs({ "dsls", "languages", "project_types" }) do

@@ -4,9 +4,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-16
+
 ### Added
 
 - Package prompts for Maven and Gradle, Maven archetype selection, Gradle source-language and DSL selection, and single-artifact Maven Central version selection.
+
+### Changed
+
+- Renamed `maven.archetype` (single table) to `maven.archetypes` (list). A legacy single `maven.archetype` override is still accepted and wrapped into the list.
 
 ### Fixed
 

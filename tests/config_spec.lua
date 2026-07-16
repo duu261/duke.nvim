@@ -36,6 +36,20 @@ describe("config", function()
     assert.equals("maven-archetype-quickstart", opts.maven.archetypes[1].artifact_id)
   end)
 
+  it("wraps a legacy Maven archetype override", function()
+    local archetype = {
+      name = "Legacy archetype",
+      group_id = "com.example",
+      artifact_id = "legacy-archetype",
+      version = "1.0.0",
+    }
+    config.setup({ maven = { archetype = archetype } })
+
+    local archetypes = config.get().maven.archetypes
+    assert.equals(1, #archetypes)
+    assert.same({ archetype }, archetypes)
+  end)
+
   it("rejects invalid scalar options and keeps defaults", function()
     config.setup({
       group_id = "",
