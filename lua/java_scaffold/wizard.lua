@@ -3,17 +3,8 @@ local M = {}
 -- Require picker lazily inside each function so mock overrides in tests work.
 -- Pattern matches init.lua and every other module in the codebase.
 
-local runtime_cache
-
-local function get_runtimes(config)
-  if not runtime_cache then
-    local java = require("java_scaffold.java")
-    runtime_cache = {
-      active = java.active(),
-      homes = java.discover_homes(config.java_homes),
-    }
-  end
-  return runtime_cache
+local function get_runtimes(_)
+  return require("java_scaffold").java_runtimes()
 end
 
 local function notify_error(message)
@@ -119,7 +110,26 @@ end
 -- Domain-specific steps.
 
 function M.project_dir(_)
-  return M.input("Destination directory: ", vim.fn.getcwd(), "destination", { allow_empty = false })
+  return function(state, callback)
+    require("java_scaffold.picker").input(
+      "Destination directory: ",
+      vim.fn.getcwd(),
+      function(value)
+        if value == nil then
+          callback(nil)
+          return
+        end
+        value = vim.trim(value)
+        if value == "" then
+          notify_error("destination directory is required")
+          callback(nil)
+          return
+        end
+        state.destination = value
+        callback(state)
+      end
+    )
+  end
 end
 
 function M.coordinates(config)

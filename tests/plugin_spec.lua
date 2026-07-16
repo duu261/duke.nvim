@@ -444,6 +444,98 @@ describe("plugin surface", function()
     assert.equals(2, discovery_count)
   end)
 
+  it("uses refreshed public Java runtime cache for wizard creation", function()
+    local active = "17"
+    local created = {}
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.config"] = {
+      get = function()
+        return {
+          group_id = "com.example",
+          artifact_id = "demo",
+          java_versions = {},
+          java_homes = {},
+          java_version = "auto",
+          maven = {
+            command = "mvn",
+            runner_java_version = "auto",
+            project_version = "1.0-SNAPSHOT",
+            wrapper = false,
+            archetypes = {
+              {
+                group_id = "org.apache.maven.archetypes",
+                artifact_id = "maven-archetype-quickstart",
+                version = "1.5",
+              },
+            },
+            timeout = 1000,
+          },
+        }
+      end,
+    }
+    package.loaded["java_scaffold.java"] = {
+      active = function()
+        return active
+      end,
+      discover_homes = function()
+        return {
+          ["17"] = "/jdk/17",
+          ["23"] = "/jdk/23",
+        }
+      end,
+      installed = function(_, _, runtimes)
+        return { runtimes.active }
+      end,
+      default = function(configured, _, fallback)
+        return configured ~= "auto" and configured or fallback
+      end,
+      runner_env = function(version, _, homes)
+        return { JAVA_HOME = homes[version] }
+      end,
+      maven_runtime_async = function(_, callback)
+        callback(active)
+      end,
+    }
+    package.loaded["java_scaffold.maven"] = {
+      validate = function()
+        return nil
+      end,
+      package_name = function()
+        return "com.example.demo"
+      end,
+      validate_package = function()
+        return nil
+      end,
+      create = function(opts)
+        created[#created + 1] = opts
+      end,
+    }
+    package.loaded["java_scaffold.picker"] = {
+      input = function(prompt, default, callback)
+        if prompt == "Destination directory: " then
+          callback("/tmp")
+        else
+          callback(default)
+        end
+      end,
+      confirm = function()
+        return true
+      end,
+      select_one = function(items, _, callback)
+        callback(items[1])
+      end,
+    }
+
+    local plugin = require("java_scaffold")
+    plugin.new_maven()
+    active = "23"
+    plugin.java_runtimes({ refresh = true })
+    plugin.new_maven()
+
+    assert.equals("/jdk/17", created[1].env.JAVA_HOME)
+    assert.equals("/jdk/23", created[2].env.JAVA_HOME)
+  end)
+
   it("selects an eligible public Java runtime", function()
     local active = "23"
     package.loaded["java_scaffold"] = nil
@@ -605,6 +697,89 @@ describe("plugin surface", function()
 
     assert.equals(1, runtime_calls)
     assert.equals(1, creation_calls)
+  end)
+
+  it("rejects blank destination instead of defaulting to cwd", function()
+    local creation_calls = 0
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.config"] = {
+      get = function()
+        return {
+          group_id = "com.example",
+          artifact_id = "demo",
+          java_versions = {},
+          java_homes = {},
+          java_version = "23",
+          maven = {
+            command = "mvn",
+            runner_java_version = "auto",
+            project_version = "1.0-SNAPSHOT",
+            wrapper = false,
+            archetypes = {
+              {
+                group_id = "org.apache.maven.archetypes",
+                artifact_id = "maven-archetype-quickstart",
+                version = "1.5",
+              },
+            },
+            timeout = 1000,
+          },
+        }
+      end,
+    }
+    package.loaded["java_scaffold.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["23"] = "/jdk/23" }
+      end,
+      installed = function()
+        return { "23" }
+      end,
+      default = function()
+        return "23"
+      end,
+      runner_env = function()
+        return { JAVA_HOME = "/jdk/23" }
+      end,
+      maven_runtime_async = function(_, callback)
+        callback("23")
+      end,
+    }
+    package.loaded["java_scaffold.maven"] = {
+      validate = function()
+        return nil
+      end,
+      package_name = function()
+        return "com.example.demo"
+      end,
+      validate_package = function()
+        return nil
+      end,
+      create = function()
+        creation_calls = creation_calls + 1
+      end,
+    }
+    package.loaded["java_scaffold.picker"] = {
+      input = function(prompt, default, callback)
+        if prompt == "Destination directory: " then
+          callback("")
+        else
+          callback(default)
+        end
+      end,
+      confirm = function()
+        return true
+      end,
+      select_one = function(items, _, callback)
+        callback(items[1])
+      end,
+    }
+
+    require("java_scaffold").new_maven()
+
+    assert.equals(0, creation_calls)
   end)
 
   it("uses explicit destination and review for Gradle creation", function()
