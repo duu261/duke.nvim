@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-16
+
 ### Added
 
 - Scope selection for single-artifact Maven Central dependency insertion, with compile as the default and test, provided, or runtime as alternatives.
