@@ -125,7 +125,13 @@ function M.project_dir(_)
           callback(nil)
           return
         end
-        state.destination = value
+        local destination = vim.fs.normalize(vim.fn.fnamemodify(value, ":p"))
+        if vim.fn.isdirectory(destination) ~= 1 then
+          notify_error("destination directory does not exist: " .. destination)
+          callback(nil)
+          return
+        end
+        state.destination = destination
         callback(state)
       end
     )
@@ -151,13 +157,6 @@ function M.coordinates(config)
           callback(nil)
           return
         end
-        local destination = vim.fs.normalize(vim.fn.fnamemodify(state.destination, ":p"))
-        if vim.fn.isdirectory(destination) ~= 1 then
-          notify_error("destination directory does not exist: " .. destination)
-          callback(nil)
-          return
-        end
-        state.destination = destination
         state.group_id = group_id
         state.artifact_id = artifact_id
         callback(state)
@@ -258,14 +257,24 @@ function M.runner_check(config, build_tool)
 
     notify("detecting " .. tool_label .. " runtime")
     detect_fn(tool_command, function(detected_runtime)
-      if detected_runtime and tonumber(state.java_version) > tonumber(detected_runtime) then
+      if build_tool == "maven" then
+        local maven_runtime = detected_runtime or runtimes.active
+        if maven_runtime and tonumber(state.java_version) > tonumber(maven_runtime) then
+          notify(
+            string.format(
+              "Java %s exceeds Maven runner Java %s; configure Maven runner JDK or toolchain",
+              state.java_version,
+              maven_runtime
+            ),
+            vim.log.levels.WARN
+          )
+        end
+      elseif detected_runtime and tonumber(state.java_version) > tonumber(detected_runtime) then
         notify(
           string.format(
-            "Java %s exceeds %s runner Java %s; configure %s toolchain",
+            "Java %s exceeds Gradle runner Java %s; configure Gradle toolchain",
             state.java_version,
-            tool_label,
-            detected_runtime,
-            tool_label
+            detected_runtime
           ),
           vim.log.levels.WARN
         )
@@ -273,6 +282,20 @@ function M.runner_check(config, build_tool)
       notify("creating " .. tool_label .. " project with Java " .. state.java_version)
       callback(state)
     end, tool_config.timeout, state[runner_env_key])
+  end
+end
+
+function M.gradle_project_type(_)
+  return function(state, callback)
+    local init_type =
+      require("java_scaffold.gradle").project_type(state.language, state.project_type.id)
+    if not init_type then
+      notify_error("unsupported Gradle source language and project type combination")
+      callback(nil)
+      return
+    end
+    state.gradle_project_type = init_type
+    callback(state)
   end
 end
 
@@ -529,6 +552,9 @@ end
 
 function M.gradle_steps(config)
   return {
+    M.project_dir(config),
+    M.coordinates(config),
+    M.package_name(config),
     M.select_one(config.gradle.project_types, {
       prompt = "Gradle project type",
       default = config.gradle.default_project_type,
@@ -537,13 +563,11 @@ function M.gradle_steps(config)
       prompt = "Gradle source language",
       default = "java",
     }, "language"),
+    M.gradle_project_type(config),
     M.select_one(config.gradle.dsls, {
       prompt = "Gradle DSL",
       default = config.gradle.dsl,
     }, "dsl"),
-    M.project_dir(config),
-    M.coordinates(config),
-    M.package_name(config),
     M.java_version(config),
     M.runner_preview(config, "gradle"),
     M.confirm("Review Gradle project", function(state)

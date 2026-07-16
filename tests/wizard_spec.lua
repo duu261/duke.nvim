@@ -5,6 +5,8 @@ describe("Wizard engine", function()
     package.loaded["java_scaffold.wizard"] = nil
     package.loaded["java_scaffold.picker"] = nil
     package.loaded["java_scaffold.config"] = nil
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.gradle"] = nil
     package.loaded["java_scaffold.java"] = nil
     package.loaded["java_scaffold.maven"] = nil
     package.loaded["java_scaffold.log"] = nil
@@ -81,6 +83,169 @@ describe("Wizard engine", function()
       end)
 
       assert.is_false(completed)
+    end)
+  end)
+
+  describe("domain steps", function()
+    it("rejects a missing destination before later prompts", function()
+      local prompts = {}
+      local missing = vim.fn.tempname()
+      package.loaded["java_scaffold.picker"] = {
+        input = function(prompt, _, callback)
+          prompts[#prompts + 1] = prompt
+          callback(missing)
+        end,
+      }
+      wizard = require("java_scaffold.wizard")
+
+      local completed = false
+      wizard.sequence({ wizard.project_dir({}) }, function()
+        completed = true
+      end)
+
+      assert.is_false(completed)
+      assert.same({ "Destination directory: " }, prompts)
+    end)
+
+    it("keeps Gradle project validation before the DSL prompt", function()
+      local events = {}
+      package.loaded["java_scaffold"] = {
+        java_runtimes = function()
+          return { active = "23", homes = { ["23"] = "/jdk/23" } }
+        end,
+      }
+      package.loaded["java_scaffold.gradle"] = {
+        project_type = function()
+          events[#events + 1] = "validate project type"
+          return nil
+        end,
+      }
+      package.loaded["java_scaffold.java"] = {
+        installed = function()
+          return { "23" }
+        end,
+        default = function()
+          return "23"
+        end,
+        runner_env = function()
+          return nil
+        end,
+        gradle_runtime_async = function(_, callback)
+          callback("23")
+        end,
+      }
+      package.loaded["java_scaffold.maven"] = {
+        validate = function()
+          return nil
+        end,
+        package_name = function()
+          return "com.example.demo"
+        end,
+        validate_package = function()
+          return nil
+        end,
+      }
+      package.loaded["java_scaffold.picker"] = {
+        input = function(prompt, default, callback)
+          events[#events + 1] = prompt
+          callback(prompt == "Destination directory: " and "/tmp" or default)
+        end,
+        select_one = function(items, opts, callback)
+          events[#events + 1] = opts.prompt
+          callback(items[1])
+        end,
+        confirm = function()
+          return true
+        end,
+      }
+      wizard = require("java_scaffold.wizard")
+      local config = {
+        group_id = "com.example",
+        artifact_id = "demo",
+        java_version = "23",
+        java_versions = {},
+        java_homes = {},
+        gradle = {
+          project_types = { { id = "unsupported", name = "Unsupported" } },
+          default_project_type = "unsupported",
+          languages = { "java" },
+          dsls = { "kotlin" },
+          dsl = "kotlin",
+          runner_java_version = "auto",
+          command = "gradle",
+          timeout = 1000,
+        },
+      }
+
+      local completed = false
+      wizard.sequence(wizard.gradle_steps(config), function()
+        completed = true
+      end)
+
+      assert.is_false(completed)
+      assert.same({
+        "Destination directory: ",
+        "Group ID: ",
+        "Artifact ID: ",
+        "Package name: ",
+        "Gradle project type",
+        "Gradle source language",
+        "validate project type",
+      }, events)
+    end)
+
+    it("keeps Maven active runtime fallback warning", function()
+      package.loaded["java_scaffold.java"] = {
+        default = function()
+          return "23"
+        end,
+        runner_env = function()
+          return nil
+        end,
+        maven_runtime_async = function(_, callback)
+          callback(nil)
+        end,
+      }
+      wizard = require("java_scaffold.wizard")
+      local config = {
+        java_homes = {},
+        maven = {
+          command = "mvn",
+          runner_java_version = "auto",
+          timeout = 1000,
+        },
+      }
+      local notifications = {}
+      local saved_notify = vim.notify
+      vim.notify = function(message)
+        notifications[#notifications + 1] = message
+      end
+
+      local completed = false
+      local ok, err = pcall(function()
+        wizard.sequence({
+          function(state, callback)
+            state.java_version = "23"
+            state._versions = { "23" }
+            state._runtimes = { active = "17", homes = {} }
+            callback(state)
+          end,
+          wizard.runner_check(config, "maven"),
+        }, function()
+          completed = true
+        end)
+      end)
+      vim.notify = saved_notify
+
+      assert.is_true(ok, err)
+      assert.is_true(completed)
+      assert.is_true(vim.tbl_contains(
+        notifications,
+        table.concat({
+          "java-scaffold.nvim: Java 23 exceeds Maven runner Java 17;",
+          "configure Maven runner JDK or toolchain",
+        }, " ")
+      ))
     end)
   end)
 

@@ -158,12 +158,6 @@ function M.new_gradle()
   local wizard = require("java_scaffold.wizard")
 
   wizard.sequence(wizard.gradle_steps(config), function(state)
-    local init_type =
-      require("java_scaffold.gradle").project_type(state.language, state.project_type.id)
-    if not init_type then
-      notify_error("unsupported Gradle source language and project type combination")
-      return
-    end
     require("java_scaffold.gradle").create({
       command = config.gradle.command,
       cwd = state.destination,
@@ -171,7 +165,7 @@ function M.new_gradle()
       artifact_id = state.artifact_id,
       package_name = state.package_name,
       java_version = state.java_version,
-      project_type = init_type,
+      project_type = state.gradle_project_type,
       dsl = state.dsl,
       test_framework = config.gradle.test_framework,
       timeout = config.gradle.timeout,
