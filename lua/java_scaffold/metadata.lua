@@ -102,6 +102,8 @@ function M.http_get(url, callback)
   require("java_scaffold.process").run("curl", {
     "--fail-with-body",
     "--location",
+    "--proto",
+    "=https",
     "--silent",
     "--show-error",
     "--header",

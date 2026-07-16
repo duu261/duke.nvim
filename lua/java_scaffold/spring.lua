@@ -13,6 +13,8 @@ function M.build_curl_args(opts)
   local args = {
     "--fail-with-body",
     "--location",
+    "--proto",
+    "=https",
     "--silent",
     "--show-error",
     "--get",
@@ -40,6 +42,21 @@ function M.build_curl_args(opts)
   args[#args + 1] = "--output"
   args[#args + 1] = opts.output
   return args
+end
+
+local function unsafe_archive_member(output)
+  for member in (output or ""):gmatch("[^\r\n]+") do
+    local normalized = member:gsub("\\", "/")
+    if normalized:match("^/") or normalized:match("^%a:/") then
+      return member
+    end
+    for component in normalized:gmatch("[^/]+") do
+      if component == ".." then
+        return member
+      end
+    end
+  end
+  return nil
 end
 
 function M.create(opts, callback)
@@ -79,29 +96,50 @@ function M.create(opts, callback)
 
       require("java_scaffold.process").run(
         "tar",
-        { "-xzf", archive, "-C", staging },
+        { "-tzf", archive },
         { timeout = opts.timeout },
-        function(extract)
-          fs.cleanup(archive)
-          if extract.code ~= 0 then
+        function(inspect)
+          if inspect.code ~= 0 then
+            fs.cleanup(archive)
             fs.cleanup(staging)
-            local detail = require("java_scaffold.process").detail(extract)
-            callback("Spring project extraction failed: " .. detail)
+            local detail = require("java_scaffold.process").detail(inspect)
+            callback("Spring archive inspection failed: " .. detail)
             return
           end
-          local staged_project = vim.fs.joinpath(staging, opts.artifact_id)
-          if not vim.uv.fs_stat(vim.fs.joinpath(staged_project, "pom.xml")) then
+          local unsafe = unsafe_archive_member(inspect.stdout)
+          if unsafe then
+            fs.cleanup(archive)
             fs.cleanup(staging)
-            callback("Spring Initializr response contained no pom.xml")
+            callback("Spring archive contains unsafe path: " .. unsafe)
             return
           end
-          local promoted, promote_error = fs.promote(staged_project, target)
-          fs.cleanup(staging)
-          if not promoted then
-            callback(promote_error)
-            return
-          end
-          callback(nil, target)
+          require("java_scaffold.process").run(
+            "tar",
+            { "-xzf", archive, "-C", staging },
+            { timeout = opts.timeout },
+            function(extract)
+              fs.cleanup(archive)
+              if extract.code ~= 0 then
+                fs.cleanup(staging)
+                local detail = require("java_scaffold.process").detail(extract)
+                callback("Spring project extraction failed: " .. detail)
+                return
+              end
+              local staged_project = vim.fs.joinpath(staging, opts.artifact_id)
+              if not vim.uv.fs_stat(vim.fs.joinpath(staged_project, "pom.xml")) then
+                fs.cleanup(staging)
+                callback("Spring Initializr response contained no pom.xml")
+                return
+              end
+              local promoted, promote_error = fs.promote(staged_project, target)
+              fs.cleanup(staging)
+              if not promoted then
+                callback(promote_error)
+                return
+              end
+              callback(nil, target)
+            end
+          )
         end
       )
     end

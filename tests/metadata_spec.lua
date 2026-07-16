@@ -99,6 +99,24 @@ describe("Initializr metadata", function()
     assert.equals(expected_error, received_error)
   end)
 
+  it("pins Initializr requests to HTTPS", function()
+    local saved_process = package.loaded["java_scaffold.process"]
+    local received_args
+    package.loaded["java_scaffold.process"] = {
+      run = function(command, args, _, callback)
+        assert.equals("curl", command)
+        received_args = args
+        callback({ code = 0, stdout = "{}", stderr = "" })
+      end,
+    }
+
+    metadata.http_get("https://start.spring.io/metadata/client", function() end)
+    package.loaded["java_scaffold.process"] = saved_process
+
+    assert.equals("--proto", received_args[3])
+    assert.equals("=https", received_args[4])
+  end)
+
   it("rejects invalid remote structure without replacing valid cache", function()
     local cache = vim.fn.tempname()
     local cached_json = vim.json.encode({
