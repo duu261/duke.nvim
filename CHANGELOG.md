@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.6.0 - 2026-07-16
+
 ### Added
 
 - `:DukeModule` command and `duke.add_module(opts, callback)` API verb to add a module to an existing Maven multi-module reactor.
