@@ -156,7 +156,7 @@ Discovery resolves duplicate JDK paths, caps each version probe at one second, a
 - Promotion happens only after expected build files exist.
 - A target appearing during generation is treated as user-owned; promotion aborts and preserves it.
 - Process commands use argument lists, never shell command strings.
-- Spring archive member paths are inspected before extraction; absolute paths and parent traversal are rejected.
+- Spring archives are inspected before extraction; absolute paths, parent traversal, symlinks, and hardlinks are rejected.
 - POM insertion re-reads file after network requests and picker interaction.
 - Only the root project dependency block is edited. Dependency management, plugins, and profiles remain untouched.
 - Compact one-line or self-closing dependency XML is rejected instead of guessed.

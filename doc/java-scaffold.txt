@@ -25,8 +25,8 @@ Telescope are needed only by their respective workflows.
 Generators build inside private staging directories, validate expected build
 files, and never overwrite an existing target. The plugin does not run,
 format, or test projects, edit Gradle dependencies, or manage JDTLS.
-Spring requests require HTTPS. Archive member paths are inspected before
-extraction; absolute paths and parent traversal are rejected.
+Spring requests require HTTPS. Archives are inspected before extraction;
+absolute paths, parent traversal, symlinks, and hardlinks are rejected.
 
 ==============================================================================
 2. CONFIGURATION                             *java-scaffold-configuration*

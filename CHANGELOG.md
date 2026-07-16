@@ -4,6 +4,10 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Fixed
+
+- Reject symlink and hardlink members before Spring archive extraction.
+
 ## 0.1.0 - 2026-07-16
 
 ### Added

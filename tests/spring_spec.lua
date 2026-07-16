@@ -85,6 +85,15 @@ describe("Spring Initializr scaffolding", function()
           callback({ code = 0, stdout = "demo-api/\ndemo-api/pom.xml\n", stderr = "" })
           return
         end
+        if args[1] == "-tvzf" then
+          callback({
+            code = 0,
+            stdout = "drwxr-xr-x user/group 0 Jul 16 07:30 demo-api/\n"
+              .. "-rw-r--r-- user/group 0 Jul 16 07:30 demo-api/pom.xml\n",
+            stderr = "",
+          })
+          return
+        end
         local staging = args[4]
         local generated = vim.fs.joinpath(staging, "demo-api")
         vim.fn.mkdir(generated, "p")
@@ -151,5 +160,62 @@ describe("Spring Initializr scaffolding", function()
     assert.equals("Spring archive contains unsafe path: ../escaped", received_error)
     assert.equals(0, vim.fn.isdirectory(vim.fs.joinpath(cwd, "demo-api")))
     assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+  end)
+
+  local function assert_rejects_archive_link(listing)
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    local extracted = false
+    local received_error
+    package.loaded["java_scaffold.process"] = {
+      run = function(command, args, _, callback)
+        if command == "curl" then
+          callback({ code = 0, stdout = "", stderr = "" })
+        elseif args[1] == "-tzf" then
+          callback({ code = 0, stdout = "demo-api/\ndemo-api/link\n", stderr = "" })
+        elseif args[1] == "-tvzf" then
+          callback({
+            code = 0,
+            stdout = "drwxr-xr-x  0 user group 0 Jul 16 07:30 demo-api/\n" .. listing,
+            stderr = "",
+          })
+        else
+          extracted = true
+          callback({ code = 0, stdout = "", stderr = "" })
+        end
+      end,
+    }
+
+    spring.create({
+      url = "https://start.spring.io/starter.tgz",
+      cwd = cwd,
+      group_id = "com.example",
+      artifact_id = "demo-api",
+      java_version = "21",
+      dependencies = {},
+      project_type = "maven-project",
+      language = "java",
+      packaging = "jar",
+    }, function(err)
+      received_error = err
+    end)
+
+    assert.is_false(extracted)
+    assert.equals("Spring archive contains unsupported link: demo-api/link", received_error)
+    assert.equals(0, vim.fn.isdirectory(vim.fs.joinpath(cwd, "demo-api")))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+  end
+
+  it("rejects archive symlinks before extraction", function()
+    assert_rejects_archive_link(
+      "lrwxrwxrwx  0 user group 0 Jul 16 07:30 demo-api/link -> ../../escape\n"
+    )
+  end)
+
+  it("rejects archive hardlinks before extraction", function()
+    assert_rejects_archive_link(
+      "hrw-r--r--  0 user group 0 Jul 16 07:30 demo-api/link link to demo-api/pom.xml\n"
+    )
   end)
 end)
