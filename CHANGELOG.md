@@ -6,12 +6,9 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
-- Internal Maven multi-module core: stage a child module privately, insert one root `<module>` entry, promote only after the parent edit succeeds, and restore the exact parent on promotion failure.
+- `:DukeModule` command and `duke.add_module(opts, callback)` API verb to add a module to an existing Maven multi-module reactor.
+- Maven multi-module core: stage a child module privately, insert one root `<module>` entry, promote only after the parent edit succeeds, and restore the exact parent on promotion failure.
 - Pure POM reactor inspection and root `<modules>` insertion with the same root-only structural policy as dependency edits.
-
-### Notes
-
-- No public multi-module command or stable API yet. The next v0.6.0 slice wraps this core for users.
 
 ## 0.5.0 - 2026-07-16
 

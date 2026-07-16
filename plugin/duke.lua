@@ -19,6 +19,10 @@ vim.api.nvim_create_user_command("DukeSpring", function()
   require("duke").new_spring()
 end, { desc = "Create a Spring Boot project", force = true })
 
+vim.api.nvim_create_user_command("DukeModule", function()
+  require("duke").new_module()
+end, { desc = "Add a module to a Maven multi-module reactor", force = true })
+
 vim.api.nvim_create_user_command("DukeAdd", function()
   require("duke").add_dependency()
 end, { desc = "Add dependencies to pom.xml (Spring catalog or Maven Central)", force = true })

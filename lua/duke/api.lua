@@ -402,6 +402,43 @@ function M.add(opts, callback)
   end)
 end
 
+function M.add_module(opts, callback)
+  local complete = completion(callback)
+  local ok, unexpected = pcall(function()
+    if type(opts) ~= "table" then
+      fail(complete, nil, "options must be a table")
+      return
+    end
+    if not non_empty_string(opts.reactor_dir) then
+      fail(complete, nil, "reactor_dir must be a non-empty string")
+      return
+    end
+    if not non_empty_string(opts.artifact_id) then
+      fail(complete, nil, "artifact_id must be a non-empty string")
+      return
+    end
+    require("duke.maven_module").create(opts, function(err, result)
+      if err then
+        fail(complete, {
+          parent_pom = result and result.parent_pom,
+          module_dir = result and result.module_dir,
+          rolled_back = result and result.rolled_back or false,
+        }, err)
+        return
+      end
+      complete({
+        ok = true,
+        parent_pom = result.parent_pom,
+        module_dir = result.module_dir,
+        rolled_back = result.rolled_back or false,
+      })
+    end)
+  end)
+  if not ok then
+    fail(complete, nil, unexpected)
+  end
+end
+
 function M.upgrade(opts, callback)
   run_sync(callback, function(complete)
     local path, validation_error = pom_request(opts, true)

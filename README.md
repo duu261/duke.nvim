@@ -9,6 +9,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects in Neovim, manage Maven 
 - Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
 - Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
 - Safe Maven dependency add, upgrade, outdated inspection, and removal workflows, with installed markers in add pickers.
+- Add a module to an existing Maven multi-module reactor with parent-first, rollback-safe promotion.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits, and offline metadata fallback.
 - Telescope or native `vim.ui` pickers, including multi-select dependency workflows.
@@ -59,6 +60,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     "DukeMaven",
     "DukeGradle",
     "DukeSpring",
+    "DukeModule",
     "DukeAdd",
     "DukeUpgrade",
     "DukeOutdated",
@@ -97,6 +99,7 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 | `:DukeMaven` | Create Maven quickstart or web application project |
 | `:DukeGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
 | `:DukeSpring` | Create Spring Boot Maven or Gradle project |
+| `:DukeModule` | Add a module to the current working directory's Maven reactor |
 | `:DukeAdd` | Add dependencies to nearest `pom.xml` from Spring catalog or Maven Central |
 | `:DukeUpgrade` | Update one explicit root dependency version from Maven Central |
 | `:DukeOutdated` | Compare literal root dependency versions with Maven Central |
@@ -225,6 +228,8 @@ For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `g
 
 `:DukeRemove` lists all root dependencies, including managed ones, and supports multi-select. A mandatory confirmation names every selected coordinate. Declining or canceling changes nothing. Removal deletes complete dependency blocks but keeps the root `<dependencies>` container, sibling blocks, comments, and surrounding blank-line formatting.
 
+`:DukeModule` prompts for an artifact ID, then a package name pre-filled from the reactor's groupId, then confirms before adding a child module to the Maven reactor rooted at the current working directory. The parent `pom.xml` gains only the new `<module>` entry, created inside a fresh `<modules>` block when none exists. Canceling any prompt or the confirmation writes nothing. Only a root `pom.xml` with `<packaging>pom</packaging>` is eligible; a plain jar-packaging pom is rejected without creating a directory.
+
 No Boot versions are hardcoded into the picker. Old-version lookup happens only when the dependency command reads an existing `pom.xml`.
 
 ## After creation
@@ -278,9 +283,9 @@ require("duke").add({
 end)
 ```
 
-`create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
+`create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. `add_module()` adds a module to an existing Maven reactor without UI; unlike the command, `reactor_dir` is required with no current-working-directory fallback. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
 
-`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `add_dependency()`, `update_dependency()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
+`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `add_dependency()`, `update_dependency()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("duke").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 
@@ -307,7 +312,7 @@ Active Java wins when eligible and `prefer_active` is not `false`; otherwise the
 
 ## Scope and limits
 
-V1 owns Maven, Gradle, and Spring project creation plus root-level Maven dependency add, upgrade, outdated inspection, and removal workflows.
+V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, plus root-level Maven dependency add, upgrade, outdated inspection, and removal workflows.
 
 The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
 

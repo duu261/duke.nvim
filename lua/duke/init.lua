@@ -235,6 +235,66 @@ function M.new_spring()
   end)
 end
 
+function M.new_module()
+  local reactor_dir = vim.fn.getcwd()
+  local wizard = require("duke.wizard")
+
+  local function derive_package_default(artifact_id)
+    local lines = require("duke.pom_file").read(vim.fs.joinpath(reactor_dir, "pom.xml"))
+    if not lines then
+      return ""
+    end
+    local reactor = require("duke.pom").reactor(lines)
+    if not reactor then
+      return ""
+    end
+    return require("duke.maven").package_name(reactor.group_id, artifact_id)
+  end
+
+  local steps = {
+    wizard.input("Artifact ID: ", "", "artifact_id"),
+    function(state, callback)
+      local derived = derive_package_default(state.artifact_id)
+      require("duke.picker").input("Package name: ", derived, function(value)
+        if value == nil then
+          callback(nil)
+          return
+        end
+        value = vim.trim(value)
+        if value == "" then
+          value = derived ~= "" and derived or nil
+        end
+        state.package_name = value
+        callback(state)
+      end)
+    end,
+    wizard.confirm("Add Maven module", function(state)
+      return {
+        { "Reactor", reactor_dir },
+        { "Artifact ID", state.artifact_id },
+        { "Package", state.package_name or "derived from reactor" },
+        { "Module directory", vim.fs.joinpath(reactor_dir, state.artifact_id or "") },
+      }
+    end),
+  }
+
+  wizard.sequence(steps, function(state)
+    require("duke.api").add_module({
+      reactor_dir = reactor_dir,
+      artifact_id = state.artifact_id,
+      package_name = state.package_name,
+    }, function(result)
+      if not result.ok then
+        notify_error(result.error)
+        return
+      end
+      local entry_file = require("duke.project").entry(result.module_dir)
+      vim.cmd.edit(vim.fn.fnameescape(entry_file))
+      notify("module ready: " .. result.module_dir)
+    end)
+  end)
+end
+
 function M.clear_cache()
   local ok, err = require("duke.metadata").clear_cache()
   if not ok then
@@ -828,6 +888,10 @@ end
 
 function M.add(opts, callback)
   require("duke.api").add(opts, callback)
+end
+
+function M.add_module(opts, callback)
+  require("duke.api").add_module(opts, callback)
 end
 
 function M.upgrade(opts, callback)

@@ -57,6 +57,7 @@ describe("programmatic API", function()
       "duke.log",
       "duke.maven",
       "duke.maven_central",
+      "duke.maven_module",
       "duke.pom",
       "duke.pom_file",
       "duke.project",
@@ -650,5 +651,115 @@ describe("programmatic API", function()
     end)
     assert.is_false(result.ok)
     assert.equals(0, calls)
+  end)
+
+  it("rejects add_module with a missing reactor_dir instead of a cwd fallback", function()
+    local duke = require("duke")
+    local result = wait_result(function(callback)
+      duke.add_module({ artifact_id = "child" }, callback)
+    end)
+    assert.is_false(result.ok)
+    assert.is_string(result.error)
+  end)
+
+  it("rejects add_module with a missing or empty artifact_id", function()
+    local duke = require("duke")
+    local reactor = temp_dir()
+    local missing = wait_result(function(callback)
+      duke.add_module({ reactor_dir = reactor }, callback)
+    end)
+    assert.is_false(missing.ok)
+    assert.is_string(missing.error)
+    local empty = wait_result(function(callback)
+      duke.add_module({ reactor_dir = reactor, artifact_id = "" }, callback)
+    end)
+    assert.is_false(empty.ok)
+    assert.is_string(empty.error)
+  end)
+
+  it("returns ok, module_dir, and parent_pom for a successful add_module", function()
+    local reactor = temp_dir()
+    package.loaded["duke.maven_module"] = {
+      create = function(opts, callback)
+        callback(nil, {
+          parent_pom = vim.fs.joinpath(opts.reactor_dir, "pom.xml"),
+          module_dir = vim.fs.joinpath(opts.reactor_dir, opts.artifact_id),
+          saved = true,
+          rolled_back = false,
+        })
+      end,
+    }
+    local duke = require("duke")
+    local result = wait_result(function(callback)
+      duke.add_module({ reactor_dir = reactor, artifact_id = "child" }, callback)
+    end)
+    assert.is_true(result.ok)
+    assert.equals(vim.fs.joinpath(reactor, "pom.xml"), result.parent_pom)
+    assert.equals(vim.fs.joinpath(reactor, "child"), result.module_dir)
+  end)
+
+  it("returns ok=false and a string error when the core fails", function()
+    local reactor = temp_dir()
+    package.loaded["duke.maven_module"] = {
+      create = function(_, callback)
+        callback("reactor pom.xml is missing", {
+          parent_pom = nil,
+          module_dir = nil,
+          saved = false,
+          rolled_back = false,
+        })
+      end,
+    }
+    local duke = require("duke")
+    local result = wait_result(function(callback)
+      duke.add_module({ reactor_dir = reactor, artifact_id = "child" }, callback)
+    end)
+    assert.is_false(result.ok)
+    assert.equals("reactor pom.xml is missing", result.error)
+  end)
+
+  it("propagates rolled_back to the add_module caller", function()
+    local reactor = temp_dir()
+    package.loaded["duke.maven_module"] = {
+      create = function(opts, callback)
+        callback("target already exists: " .. opts.reactor_dir, {
+          parent_pom = vim.fs.joinpath(opts.reactor_dir, "pom.xml"),
+          module_dir = vim.fs.joinpath(opts.reactor_dir, opts.artifact_id),
+          saved = true,
+          rolled_back = true,
+        })
+      end,
+    }
+    local duke = require("duke")
+    local result = wait_result(function(callback)
+      duke.add_module({ reactor_dir = reactor, artifact_id = "child" }, callback)
+    end)
+    assert.is_false(result.ok)
+    assert.is_true(result.rolled_back)
+  end)
+
+  it("fires the add_module callback exactly once and on the main loop", function()
+    local reactor = temp_dir()
+    package.loaded["duke.maven_module"] = {
+      create = function(_, callback)
+        callback(nil, { parent_pom = "p", module_dir = "m", saved = true, rolled_back = false })
+        callback(
+          "late failure",
+          { parent_pom = "p", module_dir = "m", saved = true, rolled_back = false }
+        )
+      end,
+    }
+    local duke = require("duke")
+    local calls = 0
+    local returned = false
+    duke.add_module({ reactor_dir = reactor, artifact_id = "child" }, function()
+      assert.is_true(returned)
+      calls = calls + 1
+    end)
+    returned = true
+    vim.wait(1000, function()
+      return calls > 0
+    end)
+    assert.equals(1, calls)
   end)
 end)

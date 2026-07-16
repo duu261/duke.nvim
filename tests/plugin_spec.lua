@@ -13,14 +13,18 @@ describe("plugin surface", function()
 
   after_each(function()
     vim.notify = original_notify
+    package.loaded["duke.api"] = nil
     package.loaded["duke.config"] = nil
     package.loaded["duke.gradle"] = nil
     package.loaded["duke.java"] = nil
+    package.loaded["duke.log"] = nil
     package.loaded["duke.maven"] = nil
     package.loaded["duke.maven_central"] = nil
+    package.loaded["duke.maven_module"] = nil
     package.loaded["duke.metadata"] = nil
     package.loaded["duke.picker"] = nil
     package.loaded["duke.pom"] = nil
+    package.loaded["duke.project"] = nil
     package.loaded["duke.spring"] = nil
     vim.cmd.cd(vim.fn.fnameescape(original_cwd))
     for _, path in ipairs(temporary_directories) do
@@ -50,6 +54,7 @@ describe("plugin surface", function()
     assert.equals(2, vim.fn.exists(":DukeUpgrade"))
     assert.equals(2, vim.fn.exists(":DukeRemove"))
     assert.equals(2, vim.fn.exists(":DukeOutdated"))
+    assert.equals(2, vim.fn.exists(":DukeModule"))
     assert.equals(2, vim.fn.exists(":DukeClearCache"))
     assert.equals(2, vim.fn.exists(":DukeLog"))
     assert.equals(2, vim.fn.exists(":DukeHealth"))
@@ -61,6 +66,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.new_maven)
     assert.is_function(plugin.new_gradle)
     assert.is_function(plugin.new_spring)
+    assert.is_function(plugin.new_module)
     assert.is_function(plugin.add_dependency)
     assert.is_function(plugin.update_dependency)
     assert.is_function(plugin.remove_dependency)
@@ -70,6 +76,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.select_runtime)
     assert.is_function(plugin.create)
     assert.is_function(plugin.add)
+    assert.is_function(plugin.add_module)
     assert.is_function(plugin.upgrade)
     assert.is_function(plugin.outdated)
     assert.is_function(plugin.remove)
@@ -1656,5 +1663,201 @@ describe("plugin surface", function()
     plugin.new_gradle()
     assert.equals(1, #created.maven)
     assert.equals(1, #created.gradle)
+  end)
+
+  local function write_reactor_pom(cwd)
+    vim.fn.writefile({
+      "<project>",
+      "  <groupId>com.example</groupId>",
+      "  <artifactId>parent</artifactId>",
+      "  <version>1.0.0</version>",
+      "  <packaging>pom</packaging>",
+      "</project>",
+    }, vim.fs.joinpath(cwd, "pom.xml"))
+  end
+
+  it("drives :DukeModule through artifact id, package name, and confirmation", function()
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    write_reactor_pom(cwd)
+    vim.cmd.cd(vim.fn.fnameescape(cwd))
+
+    local prompts = {}
+    local received = {}
+    package.loaded["duke.picker"] = {
+      input = function(prompt, default, callback)
+        prompts[#prompts + 1] = { prompt = prompt, default = default }
+        if prompt == "Artifact ID: " then
+          callback("child")
+        else
+          callback(default)
+        end
+      end,
+      confirm = function(message)
+        received.confirm = message
+        return true
+      end,
+    }
+    package.loaded["duke.api"] = {
+      add_module = function(opts, callback)
+        received.opts = opts
+        callback({
+          ok = true,
+          parent_pom = vim.fs.joinpath(cwd, "pom.xml"),
+          module_dir = vim.fs.joinpath(cwd, "child"),
+          rolled_back = false,
+        })
+      end,
+    }
+    package.loaded["duke.project"] = {
+      entry = function(path)
+        return vim.fs.joinpath(path, "src/main/java/com/example/child/Child.java")
+      end,
+    }
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+
+    require("duke").new_module()
+
+    assert.same(
+      { "Artifact ID: ", "Package name: " },
+      vim.tbl_map(function(entry)
+        return entry.prompt
+      end, prompts)
+    )
+    assert.equals("com.example.child", prompts[2].default)
+    assert.equals(cwd, received.opts.reactor_dir)
+    assert.equals("child", received.opts.artifact_id)
+    assert.equals("com.example.child", received.opts.package_name)
+    assert.is_truthy(received.confirm:find("child", 1, true))
+    assert.matches("Child%.java$", vim.api.nvim_buf_get_name(0))
+    assert.is_truthy(table.concat(notices, "\n"):find("module ready", 1, true))
+    vim.cmd("bwipeout!")
+  end)
+
+  it("cancels each :DukeModule step and the confirmation without any write", function()
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    write_reactor_pom(cwd)
+    vim.cmd.cd(vim.fn.fnameescape(cwd))
+
+    package.loaded["duke.api"] = {
+      add_module = function()
+        error("add_module must not run when a wizard step is cancelled")
+      end,
+    }
+
+    package.loaded["duke.picker"] = {
+      input = function(_, _, callback)
+        callback(nil)
+      end,
+      confirm = function()
+        error("confirm must not run when artifact id is cancelled")
+      end,
+    }
+    require("duke").new_module()
+
+    package.loaded["duke.picker"] = {
+      input = function(prompt, _, callback)
+        if prompt == "Artifact ID: " then
+          callback("child")
+        else
+          callback(nil)
+        end
+      end,
+      confirm = function()
+        error("confirm must not run when package name is cancelled")
+      end,
+    }
+    require("duke").new_module()
+
+    package.loaded["duke.picker"] = {
+      input = function(prompt, default, callback)
+        if prompt == "Artifact ID: " then
+          callback("child")
+        else
+          callback(default)
+        end
+      end,
+      confirm = function()
+        return false
+      end,
+    }
+    require("duke").new_module()
+  end)
+
+  it("reactor_dir defaults to cwd for :DukeModule", function()
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    write_reactor_pom(cwd)
+    vim.cmd.cd(vim.fn.fnameescape(cwd))
+
+    local received = {}
+    package.loaded["duke.picker"] = {
+      input = function(prompt, default, callback)
+        callback(prompt == "Artifact ID: " and "child" or default)
+      end,
+      confirm = function()
+        return true
+      end,
+    }
+    package.loaded["duke.api"] = {
+      add_module = function(opts, callback)
+        received.opts = opts
+        callback({ ok = true, parent_pom = "p", module_dir = "m", rolled_back = false })
+      end,
+    }
+    package.loaded["duke.project"] = {
+      entry = function()
+        return vim.fs.joinpath(cwd, "pom.xml")
+      end,
+    }
+
+    require("duke").new_module()
+
+    assert.equals(cwd, received.opts.reactor_dir)
+    vim.cmd("bwipeout!")
+  end)
+
+  it("notifies and logs a concise message when :DukeModule fails", function()
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    write_reactor_pom(cwd)
+    vim.cmd.cd(vim.fn.fnameescape(cwd))
+
+    local logged = {}
+    package.loaded["duke.log"] = {
+      add = function(_, message)
+        logged[#logged + 1] = message
+      end,
+    }
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+    package.loaded["duke.picker"] = {
+      input = function(prompt, default, callback)
+        callback(prompt == "Artifact ID: " and "child" or default)
+      end,
+      confirm = function()
+        return true
+      end,
+    }
+    package.loaded["duke.api"] = {
+      add_module = function(_, callback)
+        callback({ ok = false, error = "reactor packaging must be pom" })
+      end,
+    }
+
+    require("duke").new_module()
+
+    assert.is_truthy(table.concat(notices, "\n"):find("reactor packaging must be pom", 1, true))
+    assert.is_true(#logged >= 1)
   end)
 end)

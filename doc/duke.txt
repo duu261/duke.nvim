@@ -253,6 +253,25 @@ outdated({opts}, {callback})             *duke.outdated()*
     values, and unknown project kinds return structured callback errors. Every
     result callback runs once on the Neovim main loop.
 
+add_module({opts}, {callback})           *duke.add_module()*
+    Add a module to an existing Maven reactor without UI. opts requires
+    reactor_dir and artifact_id; reactor_dir must be an existing directory
+    with a pom.xml, and there is no current-working-directory fallback.
+    package_name is optional and otherwise derives from the reactor's
+    groupId. Successful results have this shape:
+>
+      {
+        ok = true,
+        parent_pom = "/absolute/path/pom.xml",
+        module_dir = "/absolute/path/child",
+        rolled_back = false,
+      }
+<
+    Failure returns ok = false and error. rolled_back is true only when the
+    core restored the parent pom.xml after a failed save or promotion. It
+    stays false both when nothing was written and when the restore attempt
+    itself failed; the latter appends detail to error instead.
+
 add_dependency()                     *duke.add_dependency()*
     Find the nearest pom.xml and start the same dependency workflow as
     :DukeAdd.
@@ -268,6 +287,10 @@ outdated_dependencies()       *duke.outdated_dependencies()*
 remove_dependency()               *duke.remove_dependency()*
     Find the nearest pom.xml and remove confirmed root dependency blocks
     through the same workflow as :DukeRemove.
+
+new_module()                             *duke.new_module()*
+    Start the :DukeModule wizard using the current working directory as the
+    reactor directory.
 
 clear_cache()                           *duke.clear_cache()*
     Delete all cached Initializr project metadata and dependency catalogs.
@@ -339,6 +362,17 @@ then choose [Done].
     language, build-script DSL, and Java version. Review the project, then
     generate a wrapper-backed Java, Kotlin, or Groovy application, library, or
     Gradle plugin.
+
+                                                  *:DukeModule*
+:DukeModule
+    Prompt for an artifact ID, then a package name pre-filled from the
+    reactor's groupId, then confirm before adding a child module to the
+    Maven reactor rooted at the current working directory. The parent
+    pom.xml gains only the new <module> entry, created inside a fresh
+    <modules> block when none exists. Canceling any prompt or the
+    confirmation writes nothing. Only a root pom.xml with
+    <packaging>pom</packaging> is eligible; a plain jar-packaging pom is
+    rejected without creating a directory.
 
                                               *:DukeAdd*
 :DukeAdd
@@ -448,10 +482,10 @@ because arbitrary searches and version lists are not cached.
 ==============================================================================
 7. SCOPE AND TROUBLESHOOTING              *duke-troubleshooting*
 
-V1 owns Maven, Gradle, and Spring project creation plus root-level Maven
-dependency add, update, and removal workflows. It deliberately does not run
-applications, format code, execute tests, edit Gradle dependencies, or manage
-JDTLS.
+V1 owns Maven, Gradle, and Spring project creation, adding a module to an
+existing Maven multi-module reactor, plus root-level Maven dependency add,
+update, and removal workflows. It deliberately does not run applications,
+format code, execute tests, edit Gradle dependencies, or manage JDTLS.
 
 For failures:
 
