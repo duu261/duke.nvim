@@ -4,6 +4,12 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-16
+
+### Changed
+
+- Split wizard orchestration, generator execution, Java runtime discovery, and Initializr metadata into focused internal modules without changing public APIs or documented behavior.
+
 ## 0.3.0 - 2026-07-16
 
 ### Added
