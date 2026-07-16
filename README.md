@@ -11,7 +11,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects in Neovim, manage Maven 
 - Safe Maven dependency add, upgrade, outdated inspection, and removal workflows, with installed markers in add pickers.
 - Add a module to an existing Maven multi-module reactor with parent-first, rollback-safe promotion.
 - Separate project Java target and Maven or Gradle runner JVM selection.
-- Private staging, target collision protection, structural POM edits, and offline metadata fallback.
+- Private staging, target collision protection, structural POM edits that stay one-line reviewable diffs, and offline metadata fallback.
 - Telescope or native `vim.ui` pickers, including multi-select dependency workflows.
 - Generated Java entry opening, `User DukeProjectCreated`, and optional post-create handoff.
 
@@ -209,6 +209,7 @@ Discovery resolves duplicate JDK paths, caps each version probe at one second, a
 - Every POM edit re-reads the file after network requests and picker interaction. Changed selections abort the operation.
 - Only the root project dependency block is edited. Dependency management, plugins, and profiles remain untouched.
 - Compact one-line or self-closing project, dependencies, or dependency XML is rejected instead of guessed.
+- POM writes skip write autocommands, so a format-on-save chain cannot reformat the file around an edit. A dependency add or version bump stays a one-line diff you can actually review. Manual `:w` still formats as configured.
 
 ## Spring metadata and Maven dependency lifecycle
 

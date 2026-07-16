@@ -412,6 +412,9 @@ then choose [Done].
     newest-first order. The current version is marked and selecting it is a
     no-op. Property-backed versions are rejected with the property name. Only
     version text changes; scope and all other block content stay untouched.
+    POM writes skip write autocommands, so a format-on-save chain cannot
+    reformat the file around the edit and bury it in a whole-file diff. A
+    manual :w still formats the buffer as configured.
 
                                        *:DukeBootUpgrade*
 :DukeBootUpgrade
