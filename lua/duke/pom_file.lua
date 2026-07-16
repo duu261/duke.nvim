@@ -25,7 +25,10 @@ function M.save(path, lines, buffer, was_modified)
         return false
       end
       vim.api.nvim_buf_call(buffer, function()
-        vim.cmd("silent write")
+        -- A plugin edit is not a user save: skip write autocommands so a
+        -- format-on-save chain cannot reformat the POM around our one-line
+        -- change and bury it in an unreviewable diff.
+        vim.cmd("silent noautocmd write")
       end)
       return true
     end

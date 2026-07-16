@@ -4,6 +4,10 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Fixed
+
+- POM writes no longer trigger write autocommands. A format-on-save chain (for example conform.nvim falling back to lemminx) previously reformatted the whole POM around a one-line dependency or parent edit, turning a reviewable change into a whole-file diff. Plugin edits now write with `noautocmd`; a manual `:w` still formats as configured.
+
 ## 0.7.0 - 2026-07-16
 
 ### Added
