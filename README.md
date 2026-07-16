@@ -57,18 +57,17 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 1. Install plugin and restart Neovim.
 2. Run `:JavaScaffoldHealth` to load a lazy installation and check available tools.
-3. Change Neovim's working directory to the parent directory that should receive the project.
-4. Run `:JavaScaffoldNew`, then choose Maven, Gradle, or Spring Boot. Direct workflow commands remain available.
-5. Choose coordinates, project options, Java target, and Spring dependencies when applicable.
+3. Run `:JavaScaffoldNew`, then choose Maven, Gradle, or Spring Boot. Direct workflow commands remain available.
+4. Choose the destination parent directory, coordinates, project options, Java target, and Spring dependencies when applicable.
+5. Review the final destination and selected settings, then confirm creation.
 
 Example:
 
 ```vim
-:cd ~/Projects
 :JavaScaffoldNew
 ```
 
-If artifact ID is `demo`, completed project becomes `~/Projects/demo`. Existing targets are never overwritten.
+Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Projects/demo`. Existing targets are never overwritten.
 
 ## Commands
 
@@ -84,6 +83,8 @@ If artifact ID is `demo`, completed project becomes `~/Projects/demo`. Existing 
 | `:JavaScaffoldHealth` | Load lazy plugin and run its health check |
 
 With Telescope, use `<Tab>` to toggle dependencies and `<Enter>` to finish. Without Telescope, select dependencies one at a time through `vim.ui.select`, then choose `[Done]`.
+
+Every generator asks for a destination parent directory, defaulting to Neovim's current working directory. A final review shows destination, coordinates, build system, Java target, runner JVM when applicable, and workflow-specific settings. Choosing `Cancel` starts no generator process.
 
 > [!IMPORTANT]
 > New Spring projects show only Boot versions offered by the configured Initializr server. `:JavaScaffoldAddDependency` instead reads the Boot version from an existing `pom.xml`. If the server no longer supplies that old version's catalog, insertion needs a previously cached catalog from the same configured URL, a compatible custom server, or a Boot upgrade.
@@ -158,6 +159,7 @@ Discovery resolves duplicate JDK paths, caps each version probe at one second, a
 ## 🛡️ Safety behavior
 
 - Every generator builds inside a private sibling staging directory.
+- The selected destination is the staging and final-project parent; changing Neovim's working directory first is optional.
 - Promotion happens only after expected build files exist.
 - A target appearing during generation is treated as user-owned; promotion aborts and preserves it.
 - Process commands use argument lists, never shell command strings.

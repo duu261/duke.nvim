@@ -7,6 +7,7 @@ describe("plugin surface", function()
 
   after_each(function()
     package.loaded["java_scaffold.config"] = nil
+    package.loaded["java_scaffold.gradle"] = nil
     package.loaded["java_scaffold.java"] = nil
     package.loaded["java_scaffold.maven"] = nil
     package.loaded["java_scaffold.metadata"] = nil
@@ -75,6 +76,7 @@ describe("plugin surface", function()
 
   it("uses selected Spring language and packaging", function()
     local received = { pickers = {} }
+    local destination = "/tmp"
     local client = {
       artifactId = { default = "demo" },
       bootVersion = { default = "4.0.0" },
@@ -144,8 +146,12 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["java_scaffold.picker"] = {
-      input = function(_, default, callback)
-        callback(default)
+      input = function(prompt, default, callback)
+        callback(prompt == "Destination directory: " and destination or default)
+      end,
+      confirm = function(prompt)
+        received.review = prompt
+        return true
       end,
       select_one = function(items, opts, callback)
         received.pickers[opts.prompt] = { items = vim.deepcopy(items), default = opts.default }
@@ -175,6 +181,12 @@ describe("plugin surface", function()
     assert.same({ items = { "jar", "war" }, default = "jar" }, received.pickers["Spring packaging"])
     assert.equals("kotlin", received.create.language)
     assert.equals("war", received.create.packaging)
+    assert.equals(destination, received.create.cwd)
+    assert.is_truthy(received.review:find("Destination: /tmp/demo", 1, true))
+    assert.is_truthy(received.review:find("Coordinates: com.example:demo", 1, true))
+    assert.is_truthy(received.review:find("Build system: Spring Boot Maven", 1, true))
+    assert.is_truthy(received.review:find("Spring Boot: 4.0.0", 1, true))
+    assert.is_truthy(received.review:find("Dependencies: none", 1, true))
   end)
 
   it("caches public Java runtime discovery", function()
@@ -256,6 +268,9 @@ describe("plugin surface", function()
     local active_calls = 0
     local discovery_calls = 0
     local received = {}
+    local confirm = true
+    local runtime_calls = 0
+    local creation_calls = 0
     package.loaded["java_scaffold"] = nil
     package.loaded["java_scaffold.config"] = {
       get = function()
@@ -298,12 +313,18 @@ describe("plugin surface", function()
         return { JAVA_HOME = "/jdk/23", PATH = "/jdk/23/bin" }
       end,
       maven_runtime_async = function(_, callback)
+        runtime_calls = runtime_calls + 1
+        assert.is_truthy(received.review)
         callback("23")
       end,
     }
     package.loaded["java_scaffold.picker"] = {
-      input = function(_, default, callback)
-        callback(default)
+      input = function(prompt, default, callback)
+        callback(prompt == "Destination directory: " and "/tmp" or default)
+      end,
+      confirm = function(prompt)
+        received.review = prompt
+        return confirm
       end,
       select_one = function(items, _, callback)
         callback(items[1])
@@ -314,6 +335,7 @@ describe("plugin surface", function()
         return nil
       end,
       create = function(opts)
+        creation_calls = creation_calls + 1
         received.create = opts
       end,
     }
@@ -326,5 +348,94 @@ describe("plugin surface", function()
     assert.equals("23", received.fallback)
     assert.same({ ["23"] = "/jdk/23" }, received.runner_homes)
     assert.equals("/jdk/23", received.create.env.JAVA_HOME)
+    assert.equals("/tmp", received.create.cwd)
+    assert.is_truthy(received.review:find("Destination: /tmp/demo", 1, true))
+    assert.is_truthy(received.review:find("Coordinates: com.example:demo", 1, true))
+    assert.is_truthy(received.review:find("Build system: Maven", 1, true))
+    assert.is_truthy(received.review:find("Java target: 23", 1, true))
+    assert.is_truthy(received.review:find("Runner JVM: 23", 1, true))
+
+    confirm = false
+    require("java_scaffold").new_maven()
+
+    assert.equals(1, runtime_calls)
+    assert.equals(1, creation_calls)
+  end)
+
+  it("uses explicit destination and review for Gradle creation", function()
+    local received = {}
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.config"] = {
+      get = function()
+        return {
+          group_id = "com.example",
+          artifact_id = "demo",
+          java_versions = {},
+          java_homes = {},
+          java_version = "23",
+          gradle = {
+            command = "gradle",
+            runner_java_version = "auto",
+            dsl = "kotlin",
+            test_framework = "auto",
+            timeout = 1000,
+            default_project_type = "java-application",
+            project_types = { { id = "java-application", name = "Java application" } },
+          },
+        }
+      end,
+    }
+    package.loaded["java_scaffold.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["23"] = "/jdk/23" }
+      end,
+      installed = function()
+        return { "23" }
+      end,
+      default = function()
+        return "23"
+      end,
+      runner_env = function()
+        return { JAVA_HOME = "/jdk/23" }
+      end,
+      gradle_runtime_async = function(_, callback)
+        assert.is_truthy(received.review)
+        callback("23")
+      end,
+    }
+    package.loaded["java_scaffold.maven"] = {
+      validate = function()
+        return nil
+      end,
+    }
+    package.loaded["java_scaffold.picker"] = {
+      input = function(prompt, default, callback)
+        callback(prompt == "Destination directory: " and "/tmp" or default)
+      end,
+      confirm = function(prompt)
+        received.review = prompt
+        return true
+      end,
+      select_one = function(items, _, callback)
+        callback(items[1])
+      end,
+    }
+    package.loaded["java_scaffold.gradle"] = {
+      create = function(opts)
+        received.create = opts
+      end,
+    }
+
+    require("java_scaffold").new_gradle()
+
+    assert.equals("/tmp", received.create.cwd)
+    assert.is_truthy(received.review:find("Destination: /tmp/demo", 1, true))
+    assert.is_truthy(received.review:find("Coordinates: com.example:demo", 1, true))
+    assert.is_truthy(received.review:find("Build system: Gradle - Java application", 1, true))
+    assert.is_truthy(received.review:find("Java target: 23", 1, true))
+    assert.is_truthy(received.review:find("Runner JVM: 23", 1, true))
   end)
 end)

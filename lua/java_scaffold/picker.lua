@@ -173,4 +173,8 @@ function M.input(prompt, default, callback)
   vim.ui.input({ prompt = prompt, default = default }, callback)
 end
 
+function M.confirm(message)
+  return vim.fn.confirm(message, "&Create\nC&ancel", 2, "Question") == 1
+end
+
 return M

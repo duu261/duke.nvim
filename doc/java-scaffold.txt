@@ -135,10 +135,13 @@ and {file}; without placeholders, the project path is appended.
 ==============================================================================
 4. COMMANDS                                      *java-scaffold-commands*
 
-Generators create projects under the current working directory. With
-Telescope, use <Tab> to toggle dependencies and <Enter> to finish. Without
-Telescope, select dependencies through vim.ui one at a time, then choose
-[Done].
+Generators prompt for a destination parent directory, defaulting to the
+current working directory. Before creation, a review shows the final
+destination, coordinates, build system, Java target, runner JVM when
+applicable, and workflow-specific settings. Canceling starts no generator
+process. With Telescope, use <Tab> to toggle dependencies and <Enter> to
+finish. Without Telescope, select dependencies through vim.ui one at a time,
+then choose [Done].
 
                                                       *:JavaScaffoldNew*
 :JavaScaffoldNew
@@ -146,19 +149,21 @@ Telescope, select dependencies through vim.ui one at a time, then choose
 
                                                     *:JavaScaffoldMaven*
 :JavaScaffoldMaven
-    Prompt for Maven coordinates and Java version. Generate a Maven quickstart
-    project under the current working directory. When maven.wrapper is true,
+    Prompt for destination, Maven coordinates, and Java version. Review the
+    project, then generate a Maven quickstart. When maven.wrapper is true,
     generate mvnw before promotion and require all Maven Wrapper files.
 
                                                     *:JavaScaffoldSpring*
 :JavaScaffoldSpring
-    Prompt for Spring project coordinates, language, packaging, Java version,
-    and dependencies. Download and extract a Spring Initializr Maven project.
+    Prompt for destination, Spring project coordinates, language, packaging,
+    Java version, and dependencies. Review the project, then download and
+    extract a Spring Initializr Maven project.
 
                                                     *:JavaScaffoldGradle*
 :JavaScaffoldGradle
-    Prompt for coordinates, Gradle project type, and Java version. Generate a
-    wrapper-backed Gradle application, library, or Gradle plugin.
+    Prompt for destination, coordinates, Gradle project type, and Java version.
+    Review the project, then generate a wrapper-backed Gradle application,
+    library, or Gradle plugin.
 
                                               *:JavaScaffoldAddDependency*
 :JavaScaffoldAddDependency

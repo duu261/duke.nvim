@@ -80,6 +80,36 @@ local function prompt_coordinates(group_default, artifact_default, callback)
   end)
 end
 
+local function prompt_project(group_default, artifact_default, callback)
+  local picker = require("java_scaffold.picker")
+  picker.input("Destination directory: ", vim.fn.getcwd(), function(value)
+    if not value then
+      return
+    end
+    value = vim.trim(value)
+    if value == "" then
+      notify_error("destination directory is required")
+      return
+    end
+    local destination = vim.fs.normalize(vim.fn.fnamemodify(value, ":p"))
+    if vim.fn.isdirectory(destination) ~= 1 then
+      notify_error("destination directory does not exist: " .. destination)
+      return
+    end
+    prompt_coordinates(group_default, artifact_default, function(group_id, artifact_id)
+      callback(destination, group_id, artifact_id)
+    end)
+  end)
+end
+
+local function confirm_project(fields)
+  local lines = { "Review project" }
+  for _, field in ipairs(fields) do
+    lines[#lines + 1] = field[1] .. ": " .. tostring(field[2])
+  end
+  return require("java_scaffold.picker").confirm(table.concat(lines, "\n"))
+end
+
 function M.setup(opts)
   require("java_scaffold.config").setup(opts)
   runtime_cache = nil
@@ -170,7 +200,7 @@ end
 
 function M.new_maven()
   local config = require("java_scaffold.config").get()
-  prompt_coordinates(config.group_id, config.artifact_id, function(group_id, artifact_id)
+  prompt_project(config.group_id, config.artifact_id, function(destination, group_id, artifact_id)
     local java, runtimes, versions = java_choices(config)
     choose_java(versions, config.java_version, runtimes.active, function(java_version, java_error)
       if java_error then
@@ -183,6 +213,17 @@ function M.new_maven()
       local runner_version =
         java.default(config.maven.runner_java_version, versions, runtimes.active)
       local runner_env = java.runner_env(runner_version, config.java_homes, runtimes.homes)
+      if
+        not confirm_project({
+          { "Destination", vim.fs.joinpath(destination, artifact_id) },
+          { "Coordinates", group_id .. ":" .. artifact_id },
+          { "Build system", "Maven" },
+          { "Java target", java_version },
+          { "Runner JVM", runner_version or "system" },
+        })
+      then
+        return
+      end
       notify("detecting Maven runtime")
       java.maven_runtime_async(config.maven.command, function(detected_runtime)
         local maven_runtime = detected_runtime or runtimes.active
@@ -199,7 +240,7 @@ function M.new_maven()
         notify("creating Maven project with Java " .. java_version)
         require("java_scaffold.maven").create({
           command = config.maven.command,
-          cwd = vim.fn.getcwd(),
+          cwd = destination,
           group_id = group_id,
           artifact_id = artifact_id,
           version = config.maven.project_version,
@@ -222,7 +263,7 @@ end
 
 function M.new_gradle()
   local config = require("java_scaffold.config").get()
-  prompt_coordinates(config.group_id, config.artifact_id, function(group_id, artifact_id)
+  prompt_project(config.group_id, config.artifact_id, function(destination, group_id, artifact_id)
     require("java_scaffold.picker").select_one(config.gradle.project_types, {
       prompt = "Gradle project type",
       default = config.gradle.default_project_type,
@@ -242,6 +283,17 @@ function M.new_gradle()
         local runner_version =
           java.default(config.gradle.runner_java_version, versions, runtimes.active)
         local runner_env = java.runner_env(runner_version, config.java_homes, runtimes.homes)
+        if
+          not confirm_project({
+            { "Destination", vim.fs.joinpath(destination, artifact_id) },
+            { "Coordinates", group_id .. ":" .. artifact_id },
+            { "Build system", "Gradle - " .. project_type.name },
+            { "Java target", java_version },
+            { "Runner JVM", runner_version or "system" },
+          })
+        then
+          return
+        end
         notify("detecting Gradle runtime")
         java.gradle_runtime_async(config.gradle.command, function(detected_runtime)
           if detected_runtime and tonumber(java_version) > tonumber(detected_runtime) then
@@ -257,7 +309,7 @@ function M.new_gradle()
           notify("creating Gradle project with Java " .. java_version)
           require("java_scaffold.gradle").create({
             command = config.gradle.command,
-            cwd = vim.fn.getcwd(),
+            cwd = destination,
             group_id = group_id,
             artifact_id = artifact_id,
             java_version = java_version,
@@ -338,10 +390,10 @@ function M.new_spring()
     end
     local config = require("java_scaffold.config").get()
     local metadata = require("java_scaffold.metadata")
-    prompt_coordinates(
+    prompt_project(
       config.group_id,
       metadata.default(client, "artifactId", "demo"),
-      function(group_id, artifact_id)
+      function(destination, group_id, artifact_id)
         local versions = metadata.values(client, "javaVersion")
         choose_java(
           versions,
@@ -380,10 +432,28 @@ function M.new_spring()
                   return item.id
                 end, selected)
                 choose_spring_options(client, config, function(language, packaging)
+                  if
+                    not confirm_project({
+                      { "Destination", vim.fs.joinpath(destination, artifact_id) },
+                      { "Coordinates", group_id .. ":" .. artifact_id },
+                      { "Build system", "Spring Boot Maven" },
+                      { "Java target", java_version },
+                      { "Runner JVM", "not used during generation" },
+                      { "Spring Boot", boot_version },
+                      { "Language", language },
+                      { "Packaging", packaging },
+                      {
+                        "Dependencies",
+                        #dependency_ids == 0 and "none" or table.concat(dependency_ids, ", "),
+                      },
+                    })
+                  then
+                    return
+                  end
                   notify("creating Spring project with Java " .. java_version)
                   require("java_scaffold.spring").create({
                     url = config.spring.starter_url,
-                    cwd = vim.fn.getcwd(),
+                    cwd = destination,
                     group_id = group_id,
                     artifact_id = artifact_id,
                     java_version = java_version,
