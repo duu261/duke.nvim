@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-16
+
 ### Added
 
 - Unified project generator picker through `:JavaScaffoldNew`.
