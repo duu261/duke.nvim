@@ -1,32 +1,47 @@
 # ☕ java-scaffold.nvim
 
-Create Maven, Gradle, and Spring Boot projects safely from Neovim, then open generated Java source or hand the project to another tool.
+Safely scaffold Maven, Gradle, and Spring Boot projects in Neovim, add Maven dependencies from Spring catalogs or Maven Central, then open generated Java source or hand the project to another tool.
 
 ## ✨ Features
 
+- Guided Maven, Gradle, and Spring Boot wizards with destination, coordinates, package, Java, workflow-specific choices, and final review.
 - Maven quickstart and web application archetypes with optional Maven Wrapper generation.
-- Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and Gradle plugins.
-- Spring Boot Maven and Gradle projects using live Spring Initializr choices.
-- Unified project generator picker plus direct workflow commands.
-- Safe dependency insertion from Spring catalogs or Maven Central into an existing `pom.xml`.
+- Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
+- Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
+- Safe Maven dependency insertion from Spring catalogs or Maven Central, including single-artifact version selection.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits, and offline metadata fallback.
+- Telescope or native `vim.ui` pickers, including multi-select dependency workflows.
 - Generated Java entry opening, `User JavaScaffoldProjectCreated`, and optional post-create handoff.
 
+Focused scope: project creation and Maven dependency insertion. The plugin does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
+
 ## 📦 Requirements
+
+Plugin core:
 
 | Tool | Needed for |
 | --- | --- |
 | Neovim 0.11+ | Plugin core |
+
+Workflow tools:
+
+| Tool | Needed for |
+| --- | --- |
 | `java` | Java discovery and project workflows |
 | `mvn` | Maven archetype generation and optional Maven Wrapper generation |
 | `gradle` | Gradle project generation |
 | `curl` | Spring requests and Maven Central dependency search |
 | `tar` | Spring archive inspection and extraction |
+
+Optional integrations:
+
+| Tool | Adds |
+| --- | --- |
 | [Telescope](https://github.com/nvim-telescope/telescope.nvim) | Optional searchable single and multi-select pickers |
 | Any external project opener | Optional post-create handoff |
 
-Missing workflow-specific tools do not affect unrelated generators. Without Telescope, the plugin uses `vim.ui`.
+Missing workflow-specific tools do not affect unrelated generators. Without Telescope, the plugin uses `vim.ui`. Existing Java filetype or JDTLS setup can activate when generated Java source opens, but neither is required or managed by this plugin.
 
 Maven Central search needs network access for every query. The service may throttle requests with HTTP 429; arbitrary searches have no offline fallback.
 
@@ -220,7 +235,7 @@ handoff = {
 
 ## Lua API
 
-`require("java_scaffold").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
+`require("java_scaffold").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `add_dependency()` starts the same nearest-`pom.xml` workflow as `:JavaScaffoldAddDependency`. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("java_scaffold").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 

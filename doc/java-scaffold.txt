@@ -1,4 +1,4 @@
-*java-scaffold.txt*  Java and Spring Boot project scaffolding for Neovim
+*java-scaffold.txt*  Maven, Gradle, and Spring Boot scaffolding for Neovim
 
 ==============================================================================
 CONTENTS                                         *java-scaffold-contents*
@@ -14,13 +14,19 @@ CONTENTS                                         *java-scaffold-contents*
 ==============================================================================
 1. INTRODUCTION                              *java-scaffold-introduction*
 
-java-scaffold.nvim creates Maven, Gradle, and Spring Boot projects from
-Neovim. It can add dependencies from a Spring catalog or Maven Central to an
-existing pom.xml, open generated Java source for an existing Java or JDTLS
-setup, and pass a completed project to an optional handoff command.
+java-scaffold.nvim safely creates Maven, Gradle, and Spring Boot projects in
+Neovim. It adds Maven dependencies from Spring catalogs or Maven Central,
+opens generated Java source for an existing Java filetype or JDTLS setup, and
+can pass a completed project to an optional handoff command.
 
-Neovim 0.11+ and java are always required. Maven, Gradle, curl, tar, and
-Telescope are needed only by their respective workflows.
+Guided wizards collect destination, coordinates, package, Java, and
+workflow-specific choices before a final review. Maven Central single
+selection includes a version picker. Telescope provides searchable pickers;
+native vim.ui remains the dependency-free fallback.
+
+Neovim 0.11+ is the only core requirement. java, Maven, Gradle, curl, and tar
+are needed only by their respective workflows. Telescope and external
+handoff tools are optional.
 
 Generators build inside private staging directories, validate expected build
 files, and never overwrite an existing target. The plugin does not run,
@@ -110,6 +116,10 @@ setup([{opts}])                              *java-scaffold.setup()*
 new()                                         *java-scaffold.new()*
     Open the unified Maven, Gradle, and Spring Boot generator picker.
     new_maven(), new_gradle(), and new_spring() start those wizards directly.
+
+add_dependency()                     *java-scaffold.add_dependency()*
+    Find the nearest pom.xml and start the same dependency workflow as
+    :JavaScaffoldAddDependency.
 
 clear_cache()                           *java-scaffold.clear_cache()*
     Delete all cached Initializr project metadata and dependency catalogs.
