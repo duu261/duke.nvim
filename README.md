@@ -8,7 +8,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects in Neovim, manage Maven 
 - Maven quickstart and web application archetypes with optional Maven Wrapper generation.
 - Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
 - Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
-- Safe Maven dependency add, update, and removal workflows for root project dependencies.
+- Safe Maven dependency add, upgrade, outdated inspection, and removal workflows, with installed markers in add pickers.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits, and offline metadata fallback.
 - Telescope or native `vim.ui` pickers, including multi-select dependency workflows.
@@ -221,7 +221,7 @@ For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `g
 
 `:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list. The current version is marked; selecting it is a no-op. Managed dependencies without a version are hidden with a count notice. Property-backed versions such as `${library.version}` are listed but rejected with the property name because property editing is outside plugin scope. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
 
-`:DukeOutdated` checks root dependencies with literal explicit versions sequentially against Maven Central and lists `current -> latest` rows. Managed and property-backed versions are skipped with counts. A timeout or HTTP 429 stops further lookups but keeps gathered rows and reports how many dependencies were not checked. Selecting a row enters the same single-dependency version picker and stale-file-safe write path as `:DukeUpgrade`; canceling leaves the POM untouched.
+`:DukeOutdated` checks root dependencies with literal explicit versions sequentially against Maven Central and lists `current -> latest` rows. Managed and property-backed versions are skipped with counts. Any lookup error, including a timeout or HTTP 429, stops further lookups but keeps gathered rows and reports how many dependencies were not checked. Selecting a row enters the same single-dependency version picker and stale-file-safe write path as `:DukeUpgrade`; canceling leaves the POM untouched.
 
 `:DukeRemove` lists all root dependencies, including managed ones, and supports multi-select. A mandatory confirmation names every selected coordinate. Declining or canceling changes nothing. Removal deletes complete dependency blocks but keeps the root `<dependencies>` container, sibling blocks, comments, and surrounding blank-line formatting.
 
@@ -274,7 +274,7 @@ Active Java wins when eligible and `prefer_active` is not `false`; otherwise the
 
 ## Scope and limits
 
-V1 owns Maven, Gradle, and Spring project creation plus root-level Maven dependency add, update, and removal workflows.
+V1 owns Maven, Gradle, and Spring project creation plus root-level Maven dependency add, upgrade, outdated inspection, and removal workflows.
 
 The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
 
