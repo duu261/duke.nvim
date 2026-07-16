@@ -70,10 +70,9 @@ describe("Java runtime selection", function()
   it("deduplicates Java homes by real path", function()
     local first = "/virtual/jdk-17"
     local second = "/virtual/jdk-23"
-    local saved_home_version = java.home_version
     local saved_realpath = vim.uv.fs_realpath
     local probes = 0
-    java.home_version = function(path)
+    local function mock_home_version(path)
       if path == first or path == second then
         probes = probes + 1
         return "23"
@@ -87,8 +86,8 @@ describe("Java runtime selection", function()
       return path
     end
 
-    local ok, homes = pcall(java.discover_homes, { ["17"] = first, ["23"] = second })
-    java.home_version = saved_home_version
+    local ok, homes =
+      pcall(java.discover_homes, { ["17"] = first, ["23"] = second }, mock_home_version)
     vim.uv.fs_realpath = saved_realpath
 
     assert.is_true(ok)
