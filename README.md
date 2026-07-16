@@ -1,42 +1,91 @@
 # java-scaffold.nvim
 
-Create Maven, Gradle, and Spring Boot projects, add Spring dependencies, and open the generated project or Java source without leaving Neovim.
+Create Maven, Gradle, and Spring Boot projects safely from Neovim, then open generated Java source or hand the project to another tool.
+
+## Features
+
+- Maven quickstart projects with optional Maven Wrapper generation.
+- Wrapper-backed Gradle applications, libraries, and Gradle plugins.
+- Spring Boot Maven projects using live Spring Initializr choices.
+- Safe Spring dependency insertion into an existing `pom.xml`.
+- Separate project Java target and Maven or Gradle runner JVM selection.
+- Private staging, target collision protection, structural POM edits, and offline metadata fallback.
+- Generated Java entry opening, `User JavaScaffoldProjectCreated`, and optional post-create handoff.
 
 ## Requirements
 
-- Neovim 0.11+
-- `java`
-- `mvn` for Maven projects
-- `gradle` for Gradle projects
-- `curl` and GNU `tar` for Spring Initializr
-- Optional: Telescope for searchable pickers
-- Optional: any project handoff command
+| Tool | Needed for |
+| --- | --- |
+| Neovim 0.11+ | Plugin core |
+| `java` | Java discovery and project workflows |
+| `mvn` | Maven quickstart and optional Maven Wrapper generation |
+| `gradle` | Gradle project generation |
+| `curl` | Spring metadata, project downloads, and dependency catalogs |
+| `tar` | Spring archive inspection and extraction |
+| [Telescope](https://github.com/nvim-telescope/telescope.nvim) | Optional searchable single and multi-select pickers |
+| Any external project opener | Optional post-create handoff |
+
+Missing workflow-specific tools do not affect unrelated generators. Without Telescope, the plugin uses `vim.ui`.
 
 ## Installation
 
-Local checkout with lazy.nvim:
-
-```lua
-{
-  dir = "~/Projects/java-scaffold.nvim",
-  name = "java-scaffold.nvim",
-  cond = vim.fn.isdirectory(vim.fn.expand("~/Projects/java-scaffold.nvim")) == 1,
-  opts = {},
-}
-```
-
-GitHub installation after publishing:
+Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
   "duu261/java-scaffold.nvim",
+  version = "*",
+  main = "java_scaffold",
+  cmd = {
+    "JavaScaffoldMaven",
+    "JavaScaffoldGradle",
+    "JavaScaffoldSpring",
+    "JavaScaffoldAddDependency",
+    "JavaScaffoldLog",
+    "JavaScaffoldHealth",
+  },
   opts = {},
 }
 ```
 
+`version = "*"` follows tagged releases. Remove it to follow `main`.
+
+## Quick start
+
+1. Install plugin and restart Neovim.
+2. Run `:JavaScaffoldHealth` to load a lazy installation and check available tools.
+3. Change Neovim's working directory to the parent directory that should receive the project.
+4. Run `:JavaScaffoldMaven`, `:JavaScaffoldGradle`, or `:JavaScaffoldSpring`.
+5. Choose coordinates, project type when applicable, Java target, and Spring dependencies.
+
+Example:
+
+```vim
+:cd ~/Projects
+:JavaScaffoldMaven
+```
+
+If artifact ID is `demo`, completed project becomes `~/Projects/demo`. Existing targets are never overwritten.
+
+## Commands
+
+| Command | Action |
+| --- | --- |
+| `:JavaScaffoldMaven` | Create Maven quickstart project |
+| `:JavaScaffoldGradle` | Create Gradle application, library, or plugin |
+| `:JavaScaffoldSpring` | Create Spring Boot Maven project |
+| `:JavaScaffoldAddDependency` | Add supported Spring dependencies to nearest `pom.xml` |
+| `:JavaScaffoldLog` | Show internal operation log |
+| `:JavaScaffoldHealth` | Load lazy plugin and run its health check |
+
+With Telescope, use `<Tab>` to toggle dependencies and `<Enter>` to finish. Without Telescope, select dependencies one at a time through `vim.ui.select`, then choose `[Done]`.
+
+> [!IMPORTANT]
+> New Spring projects show only Boot versions offered by the configured Initializr server. `:JavaScaffoldAddDependency` instead reads the Boot version from an existing `pom.xml`. If the server no longer supplies that old version's catalog, insertion needs a previously cached catalog from the same configured URL, a compatible custom server, or a Boot upgrade.
+
 ## Configuration
 
-Defaults:
+Calling `setup()` is optional. Defaults:
 
 ```lua
 require("java_scaffold").setup({
@@ -89,64 +138,48 @@ require("java_scaffold").setup({
 })
 ```
 
-`java_version = "auto"` selects the project compiler/toolchain target and defaults to the active Java version. Maven and Gradle choices include active Java, `JDK<version>` environment variables, configured homes, and JDKs discovered under common Linux, macOS, SDKMAN, asdf, and Maven directories. A configured home is accepted only when its `bin/java -version` output matches the configured version key.
+## Java target and runner JVMs
 
-Build JVM selection stays independent through each workflow's `runner_java_version`. This lets Gradle run on a modern JVM while targeting Java 8 or 11. Known runner homes become scoped `JAVA_HOME` and `PATH` values; global shell state stays unchanged. Wrappers may override `JAVA_HOME`, so health checks and project creation report the detected runner Java.
+`java_version` is project compiler or toolchain target. `"auto"` uses active Java when supported.
 
-Spring choices come from Initializr metadata for the selected Boot version. Unsupported active Java versions fall back to Initializr's default.
+Maven and Gradle choices include active Java, `JDK<version>` environment variables, configured homes, and JDKs discovered under common Linux, macOS, SDKMAN, asdf, and Maven directories. A configured home is accepted only when its `bin/java -version` output matches the configured version key.
 
-## Public API
+Discovery resolves duplicate JDK paths, caps each version probe at one second, and reuses one cached snapshot throughout Maven and Gradle wizards. Run `java_runtimes({ refresh = true })` after installing or removing a JDK during the current Neovim session.
 
-`require("java_scaffold").setup(opts)` applies configuration and clears cached runtime discovery. Calling `setup()` is optional.
+`maven.runner_java_version` and `gradle.runner_java_version` select the build JVM independently from the project target. This lets modern Gradle run on a modern JVM while the generated project still targets Java 8 or 11. Runner `JAVA_HOME` and `PATH` stay scoped to the child process; global shell state never changes.
 
-`require("java_scaffold").java_runtimes(opts)` exposes the same JDK discovery used by the plugin:
+`gradle.test_framework = "auto"` uses JUnit 4 for Java 8 or 11 and JUnit Jupiter for Java 17+.
 
-```lua
-{
-  active = "23",
-  homes = { ["23"] = "/path/to/jdk-23" },
-}
-```
+## Safety behavior
 
-Results stay cached until `setup()` runs or `java_runtimes({ refresh = true })` requests fresh discovery. Each call returns a deep copy, so caller changes cannot mutate the cache.
+- Every generator builds inside a private sibling staging directory.
+- Promotion happens only after expected build files exist.
+- A target appearing during generation is treated as user-owned; promotion aborts and preserves it.
+- Process commands use argument lists, never shell command strings.
+- Spring archive member paths are inspected before extraction; absolute paths and parent traversal are rejected.
+- POM insertion re-reads file after network requests and picker interaction.
+- Only the root project dependency block is edited. Dependency management, plugins, and profiles remain untouched.
+- Compact one-line or self-closing dependency XML is rejected instead of guessed.
 
-`require("java_scaffold").select_runtime(opts)` selects one discovered JDK and returns its version, home, and Java executable:
+## Spring metadata and dependency insertion
 
-```lua
-local runtime = require("java_scaffold").select_runtime({
-  min_version = 21,
-  prefer_active = true,
-})
--- { version = "23", home = "/path/to/jdk-23", executable = "/path/to/jdk-23/bin/java" }
-```
+Spring choices come from Initializr metadata. Unsupported active Java versions fall back to Initializr's default.
 
-`prefer_active` defaults to `true`. When active Java is unavailable or below `min_version`, the lowest eligible discovered version is selected. The function returns `nil` when no eligible JDK home exists.
+Initializr metadata, catalog, and project URLs must use HTTPS. Curl is restricted to HTTPS for both the original request and redirects.
 
-## Project coverage
+Successful metadata and Boot-version catalogs are cached below `stdpath("cache")/java-scaffold.nvim`, separately for each configured Initializr URL. Fetch failures use a valid same-URL cache. Spring project creation still needs network access.
 
-- Maven quickstart: conventional console project and tests; optional Maven Wrapper generation
-- Gradle: Java application, library, or Gradle plugin; Kotlin DSL; JUnit 4 for Java 8/11 and Jupiter for 17+
-- Spring Boot: Boot versions, Java versions, and dependencies supplied by Initializr metadata
-- Existing Spring project: safe direct dependency insertion into nearest root `pom.xml`
+Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration.
 
-## Usage
+No Boot versions are hardcoded into the picker. Old-version lookup happens only when the dependency command reads an existing `pom.xml`.
 
-| Command | Action |
-| --- | --- |
-| `:JavaScaffoldMaven` | Create Maven quickstart project |
-| `:JavaScaffoldGradle` | Create Gradle application, library, or plugin |
-| `:JavaScaffoldSpring` | Create Spring Boot project |
-| `:JavaScaffoldAddDependency` | Add Spring dependencies to nearest `pom.xml` |
-| `:JavaScaffoldLog` | Show internal operation log |
-| `:JavaScaffoldHealth` | Load the plugin and run its health check |
+## After creation
 
-Creation runs in the current working directory. Each generator builds inside a private staging directory, validates expected build files, then promotes the finished project without deleting an existing target. Wizards prompt for coordinates and Java, plus project type for Gradle or dependencies for Spring.
+Without handoff, the plugin opens generated application Java source when available, then falls back to a build file. Opening Java naturally triggers the user's normal filetype or JDTLS setup. The plugin does not configure JDTLS.
 
-With `maven.wrapper = true`, Maven runs `wrapper:wrapper` inside staging. Promotion requires `mvnw`, `mvnw.cmd`, and `.mvn/wrapper/maven-wrapper.properties`.
+Successful creation emits `User JavaScaffoldProjectCreated` with `data.project_dir` and `data.entry_file`.
 
-Without handoff, the plugin opens generated application source when available. This triggers the existing Java filetype or JDTLS setup; the plugin does not manage JDTLS. Successful creation emits `User JavaScaffoldProjectCreated` with `data.project_dir` and `data.entry_file`.
-
-Optional handoff can invoke any external project opener:
+Optional handoff invokes any external project opener:
 
 ```lua
 handoff = {
@@ -156,36 +189,70 @@ handoff = {
 }
 ```
 
-Replace `project-opener` with an available command. `{project}` and `{file}` placeholders are expanded. Without placeholders, project path is appended for compatibility. Successful creation above calls:
+`{project}` and `{file}` placeholders expand before launch. Without placeholders, project path is appended. Handoff stays disabled by default. Failure falls back to opening project inside current Neovim.
 
-```text
-project-opener /absolute/project/path
+## Lua API
+
+`require("java_scaffold").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
+
+```lua
+{
+  active = "23",
+  homes = { ["23"] = "/path/to/jdk-23" },
+}
 ```
 
-When handoff is disabled or fails, project opens in current Neovim.
+Results stay cached until `setup()` runs or `java_runtimes({ refresh = true })` requests fresh discovery. The returned table is a deep copy.
 
-## Offline metadata
+`require("java_scaffold").select_runtime(opts)` selects eligible JDK without changing environment or launching it:
 
-Successful Initializr responses are cached under `stdpath("cache")/java-scaffold.nvim`, separately for each configured Initializr URL. Fetch failures fall back to cached project metadata and Boot-version dependency coordinates. Project creation still needs network access; cached coordinates keep supported POM insertion working offline.
+```lua
+local runtime = require("java_scaffold").select_runtime({
+  min_version = 21,
+  prefer_active = true,
+})
+-- { version = "23", home = "/path/to/jdk-23", executable = "/path/to/jdk-23/bin/java" }
+```
 
-Initializr may stop serving dependency catalogs for old Spring Boot versions. Insertion for such a project requires a catalog for that Boot version cached earlier from the same configured Initializr URL. Without that cache, the Initializr rejection is reported. Upgrade the project or configure an Initializr server that still supplies the catalog.
+Active Java wins when eligible and `prefer_active` is not `false`; otherwise the lowest eligible discovered version wins. The function returns `nil` when none exists.
 
-The plugin does not add unsupported Boot versions to new-project choices or bypass Initializr compatibility rules. Old-version lookup happens only when `:JavaScaffoldAddDependency` reads that version from an existing `pom.xml`.
+## Scope and limits
 
-## Dependency insertion limits
+V1 owns Maven, Gradle, and Spring project creation plus Maven-based Spring dependency insertion.
 
-V1 inserts only Initializr dependencies representable by one normal Maven `<dependency>` block. Entries requiring a BOM import, custom repository, or annotation-processor/plugin wiring are hidden because direct insertion would create a broken build. They remain available during Spring project creation, where Initializr generates the required Maven configuration.
+The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
 
-Run `:checkhealth java_scaffold` when something fails. Health checks verify configured JDK versions and report only nvim-jdtls module availability.
+## Troubleshooting
 
-## Development
+1. Run `:JavaScaffoldHealth`. Use this command instead of direct `:checkhealth java_scaffold` when lazy-loaded plugin has not loaded yet.
+2. Run `:JavaScaffoldLog` for process arguments and detailed failure context.
+3. Check the executable required by the selected workflow.
+4. For old-Boot catalog rejection, use same-URL cache, compatible custom Initializr server, or upgrade Boot.
+5. Ensure custom Initializr URLs use HTTPS.
+6. If promotion reports an existing target, choose another artifact ID or move the user-created target.
+
+## Local development
+
+Use local checkout with lazy.nvim:
+
+```lua
+{
+  dir = "~/Projects/java-scaffold.nvim",
+  name = "java-scaffold.nvim",
+  main = "java_scaffold",
+  opts = {},
+}
+```
+
+Run gates:
 
 ```sh
 make test
 make lint
 ```
 
+See [CHANGELOG.md](CHANGELOG.md) for release history. Run `:help java-scaffold` for vimdoc.
+
 ## License
 
-Copyright (C) 2026 duu261. Licensed under GPL-3.0-or-later. See
-[LICENSE](LICENSE).
+Copyright (C) 2026 duu261. Licensed under GPL-3.0-or-later. See [LICENSE](LICENSE).

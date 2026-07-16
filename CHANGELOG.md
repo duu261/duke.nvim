@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.1.0 - 2026-07-16
+
 ### Added
 
 - Maven quickstart wizard with active-JDK selection.
@@ -19,3 +21,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Cached Java runtime discovery and minimum-version runtime selection.
 - Optional Maven Wrapper generation before project promotion.
 - Configured JDK-home version verification and precise nvim-jdtls health text.
+
+### Fixed
+
+- Report Spring Initializr JSON errors instead of generic curl status text.
+- Reject malformed nested Initializr metadata before picker or POM use.
+- Isolate metadata caches by configured Initializr URL.
+- Reuse one Java runtime snapshot per wizard, cap version probes, and deduplicate JDK paths.
+- Reject unsafe Spring archive paths before extraction and restrict curl to HTTPS.
+
+### Changed
+
+- Test claimed Neovim 0.11 floor alongside stable and nightly in CI.

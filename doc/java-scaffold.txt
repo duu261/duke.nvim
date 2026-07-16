@@ -9,6 +9,7 @@ CONTENTS                                         *java-scaffold-contents*
   4. Commands ............................. |java-scaffold-commands|
   5. Java versions ........................ |java-scaffold-java|
   6. Offline metadata ..................... |java-scaffold-offline|
+  7. Scope and troubleshooting ............ |java-scaffold-troubleshooting|
 
 ==============================================================================
 1. INTRODUCTION                              *java-scaffold-introduction*
@@ -20,6 +21,12 @@ completed project to an optional handoff command.
 
 Neovim 0.11+ and java are always required. Maven, Gradle, curl, tar, and
 Telescope are needed only by their respective workflows.
+
+Generators build inside private staging directories, validate expected build
+files, and never overwrite an existing target. The plugin does not run,
+format, or test projects, edit Gradle dependencies, or manage JDTLS.
+Spring requests require HTTPS. Archive member paths are inspected before
+extraction; absolute paths and parent traversal are rejected.
 
 ==============================================================================
 2. CONFIGURATION                             *java-scaffold-configuration*
@@ -76,6 +83,8 @@ Telescope are needed only by their respective workflows.
 <
 
 setup() is optional. Defaults apply when it is not called.
+All configured Spring Initializr URLs must use HTTPS. Curl permits only HTTPS
+for original requests and redirects.
 
 ==============================================================================
 3. PUBLIC API                                      *java-scaffold-api*
@@ -101,7 +110,8 @@ select_runtime([{opts}])              *java-scaffold.select_runtime()*
     version and defaults to 0. opts.prefer_active defaults to true. Active
     Java is selected when it is eligible and has a discovered home;
     otherwise, the lowest eligible version is selected. Return nil when no
-    eligible JDK home exists. A successful result has this shape:
+    eligible JDK home exists. This function does not change environment or
+    launch Java. A successful result has this shape:
 >
       {
         version = "23",
@@ -116,6 +126,11 @@ and {file}; without placeholders, the project path is appended.
 
 ==============================================================================
 4. COMMANDS                                      *java-scaffold-commands*
+
+Generators create projects under the current working directory. With
+Telescope, use <Tab> to toggle dependencies and <Enter> to finish. Without
+Telescope, select dependencies through vim.ui one at a time, then choose
+[Done].
 
                                                     *:JavaScaffoldMaven*
 :JavaScaffoldMaven
@@ -138,6 +153,9 @@ and {file}; without placeholders, the project path is appended.
     Find the nearest pom.xml, detect its Spring Boot version, resolve selected
     Initializr dependency IDs, and insert non-duplicate dependency blocks.
     BOM, repository, and annotation-processor entries are excluded in v1.
+    If Initializr no longer supplies an old Boot version's catalog, insertion
+    requires a valid same-URL cache, compatible custom server, or Boot
+    upgrade.
 
                                                     *:JavaScaffoldLog*
 :JavaScaffoldLog
@@ -157,6 +175,9 @@ active Java. Maven and Gradle choices include active Java, JDK<version>
 environment variables, java_versions, java_homes, and common JDK install
 directories. A configured home is accepted only when bin/java reports the
 version declared by its java_homes key.
+
+Duplicate physical paths are probed once, each version probe is capped at one
+second, and Maven or Gradle creation reuses one cached runtime snapshot.
 
 Each build system has a separate runner_java_version that defaults to active
 Java. This allows a modern Gradle JVM to target Java 8 or 11. Known runner
@@ -184,5 +205,24 @@ that still supplies the catalog.
 The plugin does not add unsupported Boot versions to new-project choices or
 bypass Initializr compatibility rules. Old-version lookup happens only when
 :JavaScaffoldAddDependency reads that version from an existing pom.xml.
+
+==============================================================================
+7. SCOPE AND TROUBLESHOOTING              *java-scaffold-troubleshooting*
+
+V1 owns Maven, Gradle, and Spring project creation plus Maven-based Spring
+dependency insertion. It deliberately does not run applications, format
+code, execute tests, edit Gradle dependencies, or manage JDTLS.
+
+For failures:
+
+1. Run :JavaScaffoldHealth. This loads a lazy installation before invoking
+   :checkhealth java_scaffold.
+2. Run :JavaScaffoldLog for process arguments and detailed failure context.
+3. Check the executable required by selected workflow.
+4. For old-Boot catalog rejection, use a same-URL cache, compatible custom
+   Initializr server, or upgrade Boot.
+5. Ensure custom Initializr URLs use HTTPS.
+6. An existing-target error means the path belongs to the user. Choose another
+   artifact ID or move the target; the plugin will not delete it.
 
 vim:tw=78:ts=8:noet:ft=help:norl:
