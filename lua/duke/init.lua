@@ -278,6 +278,18 @@ local function save_pom(path, lines, buffer, was_modified)
   return true
 end
 
+local function installed_coordinates(lines)
+  local dependencies, list_error = require("duke.pom").list(lines)
+  if list_error then
+    return nil, list_error
+  end
+  local installed = {}
+  for _, dependency in ipairs(dependencies) do
+    installed[dependency.group_id .. ":" .. dependency.artifact_id] = true
+  end
+  return installed
+end
+
 local function insert_maven_dependencies(pom_path, selected)
   local maven = require("duke.maven")
   for _, dependency in ipairs(selected) do
@@ -383,10 +395,26 @@ function M.add_dependency()
           notify("no Maven Central dependencies found")
           return
         end
+        local picker_lines = read_pom(pom_path)
+        if not picker_lines then
+          notify_error("cannot reread " .. pom_path)
+          return
+        end
+        if require("duke.pom").spring_boot_version(picker_lines) then
+          notify_error("pom.xml became a Spring Boot project; run command again")
+          return
+        end
+        local installed, list_error = installed_coordinates(picker_lines)
+        if list_error then
+          notify_error(list_error)
+          return
+        end
         require("duke.picker").select_many(choices, {
           prompt = "Add Maven Central dependencies",
           format_item = function(item)
-            return string.format("%s:%s  %s", item.group_id, item.artifact_id, item.version)
+            local coordinate = item.group_id .. ":" .. item.artifact_id
+            local suffix = installed[coordinate] and " [installed]" or ""
+            return string.format("%s  %s%s", coordinate, item.version, suffix)
           end,
         }, function(selected)
           if not selected or #selected == 0 then
@@ -410,6 +438,21 @@ function M.add_dependency()
         notify_error(catalog_error)
         return
       end
+      local picker_lines = read_pom(pom_path)
+      if not picker_lines then
+        notify_error("cannot reread " .. pom_path)
+        return
+      end
+      local picker_boot_version = require("duke.pom").spring_boot_version(picker_lines)
+      if picker_boot_version ~= boot_version then
+        notify_error("pom.xml Spring Boot version changed; run command again")
+        return
+      end
+      local installed, list_error = installed_coordinates(picker_lines)
+      if list_error then
+        notify_error(list_error)
+        return
+      end
       local metadata = require("duke.metadata")
       local choices = {}
       for _, item in ipairs(metadata.flatten_dependencies(client)) do
@@ -421,7 +464,10 @@ function M.add_dependency()
       require("duke.picker").select_many(choices, {
         prompt = "Add Spring dependencies",
         format_item = function(item)
-          return string.format("%s  [%s]", item.name, item.group)
+          local coordinate = catalog.dependencies and catalog.dependencies[item.id]
+          local key = coordinate and (coordinate.groupId .. ":" .. coordinate.artifactId)
+          local suffix = key and installed[key] and " [installed]" or ""
+          return string.format("%s  [%s]%s", item.name, item.group, suffix)
         end,
       }, function(selected)
         if not selected or #selected == 0 then

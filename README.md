@@ -215,7 +215,7 @@ Successful metadata and Boot-version catalogs are cached below `stdpath("cache")
 
 Run `:DukeClearCache` when cached Initializr data becomes stale. Next metadata request fetches fresh data.
 
-Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration.
+Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration. Spring catalog and Maven Central add pickers mark root dependencies already present in the current POM with `[installed]`; marked rows remain selectable, and structural duplicate detection remains the write guard.
 
 For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `groupId:artifactId` plus latest version. Selecting one artifact opens a newest-first version picker defaulted to that latest version, then a scope picker with `compile` as the default and `test`, `provided`, or `runtime` as alternatives. Compile scope emits no `<scope>` element. Multi-select keeps each artifact's latest version and compile scope without another prompt. Malformed result rows are skipped without discarding valid neighbors, and `pom` artifacts remain excluded. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
 

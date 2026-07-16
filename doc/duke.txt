@@ -214,6 +214,9 @@ then choose [Done].
     keeps shown latest versions and compile scope without another prompt.
     Insert non-duplicate dependency blocks. BOM, repository,
     annotation-processor, and Maven Central pom-packaging entries are excluded.
+    Spring catalog and Maven Central rows already present in the root
+    dependencies block carry [installed]. Marked rows remain selectable;
+    structural duplicate detection remains the write guard.
     If Initializr no longer
     supplies an old Boot version's catalog, insertion requires a valid
     same-URL cache, compatible custom server, or Boot upgrade. Maven Central

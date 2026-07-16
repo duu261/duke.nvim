@@ -288,6 +288,9 @@ describe("plugin surface", function()
       spring_boot_version = function()
         return nil
       end,
+      list = function()
+        return {}
+      end,
       insert = function(lines, dependencies)
         received.lines = lines
         received.dependencies = dependencies
@@ -383,6 +386,9 @@ describe("plugin surface", function()
     package.loaded["duke.pom"] = {
       spring_boot_version = function()
         return nil
+      end,
+      list = function()
+        return {}
       end,
       insert = function()
         error("pom insert must not run")
@@ -792,6 +798,43 @@ describe("plugin surface", function()
     assert.same(current, vim.fn.readfile(pom_path))
   end)
 
+  it("marks installed Maven Central results from a fresh pom read", function()
+    local pom_path = open_pom({ "<project>", "  <state>initial</state>", "</project>" })
+    package.loaded["duke.pom"] = {
+      spring_boot_version = function()
+        return nil
+      end,
+      list = function(lines)
+        assert.is_truthy(table.concat(lines, "\n"):find("fresh", 1, true))
+        return { { group_id = "com.google.guava", artifact_id = "guava" } }
+      end,
+    }
+    package.loaded["duke.maven_central"] = {
+      search = function(_, callback)
+        vim.fn.writefile({ "<project>", "  <state>fresh</state>", "</project>" }, pom_path)
+        callback(nil, {
+          { group_id = "com.google.guava", artifact_id = "guava", version = "33.4.8-jre" },
+          { group_id = "org.junit.jupiter", artifact_id = "junit-jupiter", version = "5.13.4" },
+        })
+      end,
+      versions = function()
+        error("cancelled result picker must not fetch versions")
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      input = function(_, _, callback)
+        callback("test")
+      end,
+      select_many = function(items, opts, callback)
+        assert.equals("com.google.guava:guava  33.4.8-jre [installed]", opts.format_item(items[1]))
+        assert.equals("org.junit.jupiter:junit-jupiter  5.13.4", opts.format_item(items[2]))
+        callback(nil)
+      end,
+    }
+
+    require("duke").add_dependency()
+  end)
+
   it("removes multiple Maven dependencies only after confirmation", function()
     local cwd = vim.fn.tempname()
     vim.fn.mkdir(cwd, "p")
@@ -919,7 +962,8 @@ describe("plugin surface", function()
     local cwd = vim.fn.tempname()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
-    vim.fn.writefile({ "<project>", "</project>" }, vim.fs.joinpath(cwd, "pom.xml"))
+    local pom_path = vim.fs.joinpath(cwd, "pom.xml")
+    vim.fn.writefile({ "<project>", "  <state>initial</state>", "</project>" }, pom_path)
     vim.cmd.cd(vim.fn.fnameescape(cwd))
     vim.opt.runtimepath:prepend(original_cwd)
     vim.cmd("enew!")
@@ -939,6 +983,12 @@ describe("plugin surface", function()
       spring_boot_version = function()
         return "3.5.4"
       end,
+      list = function(lines)
+        assert.is_truthy(table.concat(lines, "\n"):find("fresh", 1, true))
+        return {
+          { group_id = "org.springframework.boot", artifact_id = "spring-boot-starter-web" },
+        }
+      end,
       insert = function(lines, dependencies)
         received.dependencies = dependencies
         return lines, #dependencies
@@ -950,7 +1000,15 @@ describe("plugin surface", function()
       end,
       fetch_cached = function(url, _, _, callback)
         if url:find("dependencies", 1, true) then
-          callback(nil, { dependencies = { web = {} } })
+          vim.fn.writefile({ "<project>", "  <state>fresh</state>", "</project>" }, pom_path)
+          callback(nil, {
+            dependencies = {
+              web = {
+                groupId = "org.springframework.boot",
+                artifactId = "spring-boot-starter-web",
+              },
+            },
+          })
         else
           callback(nil, { dependencies = {} })
         end
@@ -984,6 +1042,7 @@ describe("plugin surface", function()
       end,
       select_many = function(items, opts, callback)
         assert.equals("Add Spring dependencies", opts.prompt)
+        assert.equals("Spring Web  [Web] [installed]", opts.format_item(items[1]))
         callback(items)
       end,
     }

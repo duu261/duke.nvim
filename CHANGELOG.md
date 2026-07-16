@@ -10,6 +10,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Single-dependency Maven Central version updates that preserve all other dependency block content and hide managed versions.
 - Confirmed multi-select removal of root Maven dependency blocks with stale-file protection.
 - Read-only outdated dependency checks with sequential Maven Central lookups, partial results on throttling, and handoff to the existing single-dependency upgrade flow.
+- Installed markers in Spring catalog and Maven Central add pickers, based on a fresh read of root POM dependencies.
 
 ### Changed
 
