@@ -2,16 +2,16 @@ describe("Wizard engine", function()
   local wizard
 
   before_each(function()
-    package.loaded["java_scaffold.wizard"] = nil
-    package.loaded["java_scaffold.picker"] = nil
-    package.loaded["java_scaffold.config"] = nil
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.gradle"] = nil
-    package.loaded["java_scaffold.java"] = nil
-    package.loaded["java_scaffold.maven"] = nil
-    package.loaded["java_scaffold.log"] = nil
-    package.loaded["java_scaffold.metadata"] = nil
-    wizard = require("java_scaffold.wizard")
+    package.loaded["duke.wizard"] = nil
+    package.loaded["duke.picker"] = nil
+    package.loaded["duke.config"] = nil
+    package.loaded["duke"] = nil
+    package.loaded["duke.gradle"] = nil
+    package.loaded["duke.java"] = nil
+    package.loaded["duke.maven"] = nil
+    package.loaded["duke.log"] = nil
+    package.loaded["duke.metadata"] = nil
+    wizard = require("duke.wizard")
   end)
 
   describe("sequence", function()
@@ -90,13 +90,13 @@ describe("Wizard engine", function()
     it("rejects a missing destination before later prompts", function()
       local prompts = {}
       local missing = vim.fn.tempname()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         input = function(prompt, _, callback)
           prompts[#prompts + 1] = prompt
           callback(missing)
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local completed = false
       wizard.sequence({ wizard.project_dir({}) }, function()
@@ -109,18 +109,18 @@ describe("Wizard engine", function()
 
     it("keeps Gradle project validation before the DSL prompt", function()
       local events = {}
-      package.loaded["java_scaffold"] = {
+      package.loaded["duke"] = {
         java_runtimes = function()
           return { active = "23", homes = { ["23"] = "/jdk/23" } }
         end,
       }
-      package.loaded["java_scaffold.gradle"] = {
+      package.loaded["duke.gradle"] = {
         project_type = function()
           events[#events + 1] = "validate project type"
           return nil
         end,
       }
-      package.loaded["java_scaffold.java"] = {
+      package.loaded["duke.java"] = {
         installed = function()
           return { "23" }
         end,
@@ -134,7 +134,7 @@ describe("Wizard engine", function()
           callback("23")
         end,
       }
-      package.loaded["java_scaffold.maven"] = {
+      package.loaded["duke.maven"] = {
         validate = function()
           return nil
         end,
@@ -145,7 +145,7 @@ describe("Wizard engine", function()
           return nil
         end,
       }
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         input = function(prompt, default, callback)
           events[#events + 1] = prompt
           callback(prompt == "Destination directory: " and "/tmp" or default)
@@ -158,7 +158,7 @@ describe("Wizard engine", function()
           return true
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
       local config = {
         group_id = "com.example",
         artifact_id = "demo",
@@ -195,7 +195,7 @@ describe("Wizard engine", function()
     end)
 
     it("keeps Maven active runtime fallback warning", function()
-      package.loaded["java_scaffold.java"] = {
+      package.loaded["duke.java"] = {
         default = function()
           return "23"
         end,
@@ -206,7 +206,7 @@ describe("Wizard engine", function()
           callback(nil)
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
       local config = {
         java_homes = {},
         maven = {
@@ -242,7 +242,7 @@ describe("Wizard engine", function()
       assert.is_true(vim.tbl_contains(
         notifications,
         table.concat({
-          "java-scaffold.nvim: Java 23 exceeds Maven runner Java 17;",
+          "duke.nvim: Java 23 exceeds Maven runner Java 17;",
           "configure Maven runner JDK or toolchain",
         }, " ")
       ))
@@ -251,12 +251,12 @@ describe("Wizard engine", function()
 
   describe("select_one step", function()
     it("stores selected item in state", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         select_one = function(items, _opts, callback)
           callback(items[2]) -- pick second item
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local received
       wizard.sequence({
@@ -269,12 +269,12 @@ describe("Wizard engine", function()
     end)
 
     it("aborts when user cancels selection", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         select_one = function(_, _, callback)
           callback(nil) -- user cancelled
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local completed = false
       wizard.sequence({
@@ -289,12 +289,12 @@ describe("Wizard engine", function()
 
   describe("select_many step", function()
     it("stores selected items in state", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         select_many = function(items, _opts, callback)
           callback({ items[1], items[3] })
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local received
       wizard.sequence({
@@ -307,12 +307,12 @@ describe("Wizard engine", function()
     end)
 
     it("aborts when user cancels multi-select", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         select_many = function(_, _, callback)
           callback(nil)
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local completed = false
       wizard.sequence({
@@ -327,12 +327,12 @@ describe("Wizard engine", function()
 
   describe("input step", function()
     it("stores trimmed value in state", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         input = function(_prompt, _default, callback)
           callback("  hello  ")
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local received
       wizard.sequence({
@@ -345,12 +345,12 @@ describe("Wizard engine", function()
     end)
 
     it("uses default when empty and allow_empty is false", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         input = function(_prompt, _default, callback)
           callback("")
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local received
       wizard.sequence({
@@ -363,12 +363,12 @@ describe("Wizard engine", function()
     end)
 
     it("aborts when user cancels input", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         input = function(_, _, callback)
           callback(nil)
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local completed = false
       wizard.sequence({
@@ -383,12 +383,12 @@ describe("Wizard engine", function()
 
   describe("confirm step", function()
     it("continues when user confirms", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         confirm = function(_)
           return true
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local received
       wizard.sequence({
@@ -407,12 +407,12 @@ describe("Wizard engine", function()
     end)
 
     it("aborts when user declines", function()
-      package.loaded["java_scaffold.picker"] = {
+      package.loaded["duke.picker"] = {
         confirm = function(_)
           return false
         end,
       }
-      wizard = require("java_scaffold.wizard")
+      wizard = require("duke.wizard")
 
       local completed = false
       wizard.sequence({

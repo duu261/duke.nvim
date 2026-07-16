@@ -3,12 +3,12 @@ describe("Spring Initializr scaffolding", function()
   local temporary_directories = {}
 
   before_each(function()
-    package.loaded["java_scaffold.spring"] = nil
-    spring = require("java_scaffold.spring")
+    package.loaded["duke.spring"] = nil
+    spring = require("duke.spring")
   end)
 
   after_each(function()
-    package.loaded["java_scaffold.process"] = nil
+    package.loaded["duke.process"] = nil
     for _, path in ipairs(temporary_directories) do
       vim.fn.delete(path, "rf")
     end
@@ -79,7 +79,7 @@ describe("Spring Initializr scaffolding", function()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
     local callback_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function()
         error("request must not start")
       end,
@@ -96,7 +96,7 @@ describe("Spring Initializr scaffolding", function()
     end)
 
     assert.matches("package", callback_error)
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("contains archive contents inside staging", function()
@@ -104,7 +104,7 @@ describe("Spring Initializr scaffolding", function()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
     local project_dir
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         if command == "curl" then
           callback({ code = 0, stdout = "", stderr = "" })
@@ -151,7 +151,7 @@ describe("Spring Initializr scaffolding", function()
 
     assert.equals(vim.fs.joinpath(cwd, "demo-api"), project_dir)
     assert.equals(0, vim.fn.filereadable(vim.fs.joinpath(cwd, "unexpected")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("rejects unsafe archive members before extraction", function()
@@ -160,7 +160,7 @@ describe("Spring Initializr scaffolding", function()
     temporary_directories[#temporary_directories + 1] = cwd
     local extracted = false
     local received_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         if command == "curl" then
           callback({ code = 0, stdout = "", stderr = "" })
@@ -191,7 +191,7 @@ describe("Spring Initializr scaffolding", function()
     assert.is_false(extracted)
     assert.equals("Spring archive contains unsafe path: ../escaped", received_error)
     assert.equals(0, vim.fn.isdirectory(vim.fs.joinpath(cwd, "demo-api")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   local function assert_rejects_archive_link(listing)
@@ -200,7 +200,7 @@ describe("Spring Initializr scaffolding", function()
     temporary_directories[#temporary_directories + 1] = cwd
     local extracted = false
     local received_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         if command == "curl" then
           callback({ code = 0, stdout = "", stderr = "" })
@@ -237,7 +237,7 @@ describe("Spring Initializr scaffolding", function()
     assert.is_false(extracted)
     assert.equals("Spring archive contains unsupported link: demo-api/link", received_error)
     assert.equals(0, vim.fn.isdirectory(vim.fs.joinpath(cwd, "demo-api")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end
 
   it("rejects archive symlinks before extraction", function()
@@ -257,7 +257,7 @@ describe("Spring Initializr scaffolding", function()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
     local project_dir
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         if command == "curl" then
           callback({ code = 0, stdout = "", stderr = "" })
@@ -308,7 +308,7 @@ describe("Spring Initializr scaffolding", function()
       vim.fn.mkdir(cwd, "p")
       temporary_directories[#temporary_directories + 1] = cwd
       local received_error
-      package.loaded["java_scaffold.process"] = {
+      package.loaded["duke.process"] = {
         run = function(command, args, _, callback)
           if command == "curl" then
             callback({ code = 0, stdout = "", stderr = "" })

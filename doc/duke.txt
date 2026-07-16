@@ -1,20 +1,20 @@
-*java-scaffold.txt*  Maven, Gradle, and Spring Boot scaffolding for Neovim
+*duke.txt*  Maven, Gradle, and Spring Boot scaffolding for Neovim
 
 ==============================================================================
-CONTENTS                                         *java-scaffold-contents*
+CONTENTS                                         *duke-contents*
 
-  1. Introduction ......................... |java-scaffold-introduction|
-  2. Configuration ........................ |java-scaffold-configuration|
-  3. Public API ........................... |java-scaffold-api|
-  4. Commands ............................. |java-scaffold-commands|
-  5. Java versions ........................ |java-scaffold-java|
-  6. Offline metadata ..................... |java-scaffold-offline|
-  7. Scope and troubleshooting ............ |java-scaffold-troubleshooting|
+  1. Introduction ......................... |duke-introduction|
+  2. Configuration ........................ |duke-configuration|
+  3. Public API ........................... |duke-api|
+  4. Commands ............................. |duke-commands|
+  5. Java versions ........................ |duke-java|
+  6. Offline metadata ..................... |duke-offline|
+  7. Scope and troubleshooting ............ |duke-troubleshooting|
 
 ==============================================================================
-1. INTRODUCTION                              *java-scaffold-introduction*
+1. INTRODUCTION                              *duke-introduction*
 
-java-scaffold.nvim safely creates Maven, Gradle, and Spring Boot projects in
+duke.nvim safely creates Maven, Gradle, and Spring Boot projects in
 Neovim. It adds, updates, and removes root Maven dependencies,
 opens generated Java source for an existing Java filetype or JDTLS setup, and
 can pass a completed project to an optional handoff command.
@@ -35,10 +35,10 @@ Spring requests require HTTPS. Archives are inspected before extraction;
 absolute paths, parent traversal, symlinks, and hardlinks are rejected.
 
 ==============================================================================
-2. CONFIGURATION                             *java-scaffold-configuration*
+2. CONFIGURATION                             *duke-configuration*
 
 >lua
-  require("java_scaffold").setup({
+  require("duke").setup({
     group_id = "com.example",
     artifact_id = "demo",
     java_version = "auto",
@@ -107,33 +107,33 @@ All configured Spring Initializr URLs must use HTTPS. Curl permits only HTTPS
 for original requests and redirects.
 
 ==============================================================================
-3. PUBLIC API                                      *java-scaffold-api*
+3. PUBLIC API                                      *duke-api*
 
-setup([{opts}])                              *java-scaffold.setup()*
+setup([{opts}])                              *duke.setup()*
     Apply configuration. Calling setup() without options uses defaults.
     Every call clears cached Java runtime discovery.
 
-new()                                         *java-scaffold.new()*
+new()                                         *duke.new()*
     Open the unified Maven, Gradle, and Spring Boot generator picker.
     new_maven(), new_gradle(), and new_spring() start those wizards directly.
 
-add_dependency()                     *java-scaffold.add_dependency()*
+add_dependency()                     *duke.add_dependency()*
     Find the nearest pom.xml and start the same dependency workflow as
-    :JavaScaffoldAddDependency.
+    :DukeAdd.
 
-update_dependency()               *java-scaffold.update_dependency()*
+update_dependency()               *duke.update_dependency()*
     Find the nearest pom.xml and update one explicit root dependency version
-    through the same workflow as :JavaScaffoldUpdateDependency.
+    through the same workflow as :DukeUpgrade.
 
-remove_dependency()               *java-scaffold.remove_dependency()*
+remove_dependency()               *duke.remove_dependency()*
     Find the nearest pom.xml and remove confirmed root dependency blocks
-    through the same workflow as :JavaScaffoldRemoveDependency.
+    through the same workflow as :DukeRemove.
 
-clear_cache()                           *java-scaffold.clear_cache()*
+clear_cache()                           *duke.clear_cache()*
     Delete all cached Initializr project metadata and dependency catalogs.
     Return true on success and false when deletion fails.
 
-java_runtimes([{opts}])                *java-scaffold.java_runtimes()*
+java_runtimes([{opts}])                *duke.java_runtimes()*
     Return the Java runtimes discovered for plugin and editor integration:
 >
       {
@@ -145,7 +145,7 @@ java_runtimes([{opts}])                *java-scaffold.java_runtimes()*
     maps Java major versions to JDK homes. Discovery stays cached until
     setup() runs or opts.refresh is true. Every call returns a deep copy.
 
-select_runtime([{opts}])              *java-scaffold.select_runtime()*
+select_runtime([{opts}])              *duke.select_runtime()*
     Select one discovered JDK. opts.min_version sets the minimum Java major
     version and defaults to 0. opts.prefer_active defaults to true. Active
     Java is selected when it is eligible and has a discovered home;
@@ -160,12 +160,12 @@ select_runtime([{opts}])              *java-scaffold.select_runtime()*
       }
 <
 
-Successful creation emits User JavaScaffoldProjectCreated. Event data
+Successful creation emits User DukeProjectCreated. Event data
 contains project_dir and entry_file. Handoff arguments may contain {project}
 and {file}; without placeholders, the project path is appended.
 
 ==============================================================================
-4. COMMANDS                                      *java-scaffold-commands*
+4. COMMANDS                                      *duke-commands*
 
 Generators prompt for a destination parent directory, defaulting to the
 current working directory. Before creation, a review shows the final
@@ -175,33 +175,33 @@ process. With Telescope, use <Tab> to toggle dependencies and <Enter> to
 finish. Without Telescope, select dependencies through vim.ui one at a time,
 then choose [Done].
 
-                                                      *:JavaScaffoldNew*
-:JavaScaffoldNew
+                                                      *:DukeNew*
+:DukeNew
     Choose Maven, Gradle, or Spring Boot, then start that workflow's wizard.
 
-                                                    *:JavaScaffoldMaven*
-:JavaScaffoldMaven
+                                                    *:DukeMaven*
+:DukeMaven
     Pick a Maven archetype, then prompt for destination, coordinates, package,
     and Java version. Review the project, then generate it. A single configured
     archetype skips the picker. When maven.wrapper is true, generate mvnw before
     promotion and require all Maven Wrapper files.
 
-                                                    *:JavaScaffoldSpring*
-:JavaScaffoldSpring
+                                                    *:DukeSpring*
+:DukeSpring
     Prompt for destination, coordinates, project name, description, package,
     Boot version, Maven or Gradle project type, language, packaging, Java
     version, and dependencies. Review the project, then download and extract
     the Spring Initializr project.
 
-                                                    *:JavaScaffoldGradle*
-:JavaScaffoldGradle
+                                                    *:DukeGradle*
+:DukeGradle
     Prompt for destination, coordinates, package, Gradle project type, source
     language, build-script DSL, and Java version. Review the project, then
     generate a wrapper-backed Java, Kotlin, or Groovy application, library, or
     Gradle plugin.
 
-                                              *:JavaScaffoldAddDependency*
-:JavaScaffoldAddDependency
+                                              *:DukeAdd*
+:DukeAdd
     Find the nearest pom.xml. For Spring Boot, resolve selected Initializr
     dependency IDs. For plain Maven, search Maven Central and select results
     showing groupId:artifactId plus latest version. A single artifact opens a
@@ -215,8 +215,8 @@ then choose [Done].
     same-URL cache, compatible custom server, or Boot upgrade. Maven Central
     search needs live network access and has no offline fallback.
 
-                                           *:JavaScaffoldUpdateDependency*
-:JavaScaffoldUpdateDependency
+                                           *:DukeUpgrade*
+:DukeUpgrade
     Find the nearest pom.xml and list root dependencies with explicit version
     elements. Managed dependencies without versions are hidden with a count
     notice. Select one dependency, then choose from Maven Central versions in
@@ -224,8 +224,8 @@ then choose [Done].
     no-op. Property-backed versions are rejected with the property name. Only
     version text changes; scope and all other block content stay untouched.
 
-                                           *:JavaScaffoldRemoveDependency*
-:JavaScaffoldRemoveDependency
+                                           *:DukeRemove*
+:DukeRemove
     Find the nearest pom.xml and multi-select root dependencies, including
     managed dependencies without versions. A mandatory confirmation lists
     every selected groupId:artifactId. Canceling or declining changes nothing.
@@ -233,22 +233,22 @@ then choose [Done].
     dependencies container, sibling blocks, comments, and surrounding blank
     lines.
 
-                                               *:JavaScaffoldClearCache*
-:JavaScaffoldClearCache
+                                               *:DukeClearCache*
+:DukeClearCache
     Delete all cached Initializr project metadata and dependency catalogs.
 
-                                                    *:JavaScaffoldLog*
-:JavaScaffoldLog
+                                                    *:DukeLog*
+:DukeLog
     Open the in-memory operation log.
 
-                                                    *:JavaScaffoldHealth*
-:JavaScaffoldHealth
-    Load a lazy plugin instance and run :checkhealth java_scaffold.
+                                                    *:DukeHealth*
+:DukeHealth
+    Load a lazy plugin instance and run :checkhealth duke.
 
-Run :checkhealth java_scaffold directly when the plugin is already loaded.
+Run :checkhealth duke directly when the plugin is already loaded.
 
 ==============================================================================
-5. JAVA VERSIONS                                  *java-scaffold-java*
+5. JAVA VERSIONS                                  *duke-java*
 
 java_version selects the project compiler or toolchain target; "auto" uses
 active Java. Maven and Gradle choices include active Java, JDK<version>
@@ -269,15 +269,15 @@ Spring Boot versions and full-project Maven or Gradle types come from
 Initializr metadata. Dependency choices use the selected Boot version.
 
 ==============================================================================
-6. OFFLINE METADATA                            *java-scaffold-offline*
+6. OFFLINE METADATA                            *duke-offline*
 
 Initializr project metadata and Boot-version dependency coordinates are
-cached under stdpath("cache")/java-scaffold.nvim after successful requests,
+cached under stdpath("cache")/duke.nvim after successful requests,
 separately for each configured Initializr URL. Fetch failures use those
 files. Cached data supports dependency insertion offline; new project
 archives still require network access.
 
-Use :JavaScaffoldClearCache when cached Initializr data becomes stale. The
+Use :DukeClearCache when cached Initializr data becomes stale. The
 next metadata request fetches fresh data.
 
 Initializr may stop serving dependency catalogs for old Spring Boot
@@ -288,13 +288,13 @@ that still supplies the catalog.
 
 The plugin does not add unsupported Boot versions to new-project choices or
 bypass Initializr compatibility rules. Old-version lookup happens only when
-:JavaScaffoldAddDependency reads that version from an existing pom.xml.
+:DukeAdd reads that version from an existing pom.xml.
 Plain Maven poms instead use live Maven Central search. Dependency updates use
 live Maven Central version lookup. The service may return HTTP 429; rerun later
 because arbitrary searches and version lists are not cached.
 
 ==============================================================================
-7. SCOPE AND TROUBLESHOOTING              *java-scaffold-troubleshooting*
+7. SCOPE AND TROUBLESHOOTING              *duke-troubleshooting*
 
 V1 owns Maven, Gradle, and Spring project creation plus root-level Maven
 dependency add, update, and removal workflows. It deliberately does not run
@@ -303,9 +303,9 @@ JDTLS.
 
 For failures:
 
-1. Run :JavaScaffoldHealth. This loads a lazy installation before invoking
-   :checkhealth java_scaffold.
-2. Run :JavaScaffoldLog for process arguments and detailed failure context.
+1. Run :DukeHealth. This loads a lazy installation before invoking
+   :checkhealth duke.
+2. Run :DukeLog for process arguments and detailed failure context.
 3. Check the executable required by selected workflow.
 4. For old-Boot catalog rejection, use a same-URL cache, compatible custom
    Initializr server, or upgrade Boot.

@@ -4,7 +4,7 @@
 local M = {}
 local VERSION_PROBE_TIMEOUT = 1000
 
-local version = require("java_scaffold.java_version")
+local version = require("duke.java_version")
 
 local function version_from(command)
   local started, process = pcall(vim.system, { command, "-version" }, { text = true })
@@ -50,7 +50,7 @@ function M.gradle_runtime(command, env)
 end
 
 local function runtime_async(command, parse_fn, callback, timeout, env)
-  require("java_scaffold.process").run(command, { "--version" }, {
+  require("duke.process").run(command, { "--version" }, {
     timeout = timeout,
     env = env,
   }, function(result)

@@ -1,9 +1,9 @@
 ---Public API facade. Delegates to initializr_cache (transport) and initializr_model (data).
----@see java_scaffold.initializr_cache
----@see java_scaffold.initializr_model
+---@see duke.initializr_cache
+---@see duke.initializr_model
 
-local cache = require("java_scaffold.initializr_cache")
-local model = require("java_scaffold.initializr_model")
+local cache = require("duke.initializr_cache")
+local model = require("duke.initializr_model")
 
 return {
   -- Transport

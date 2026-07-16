@@ -2,8 +2,8 @@ describe("Java runtime selection", function()
   local java
 
   before_each(function()
-    package.loaded["java_scaffold.java"] = nil
-    java = require("java_scaffold.java")
+    package.loaded["duke.java"] = nil
+    java = require("duke.java")
   end)
 
   it("parses modern Java versions", function()
@@ -23,7 +23,7 @@ describe("Java runtime selection", function()
   end)
 
   it("detects Maven runtime asynchronously", function()
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         assert.equals("mvn", command)
         assert.same({ "--version" }, args)
@@ -37,7 +37,7 @@ describe("Java runtime selection", function()
     end)
 
     assert.equals("21", result)
-    package.loaded["java_scaffold.process"] = nil
+    package.loaded["duke.process"] = nil
   end)
 
   it("bounds synchronous Java version probes", function()

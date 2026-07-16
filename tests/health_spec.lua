@@ -16,8 +16,8 @@ describe("health", function()
       end
     end
 
-    package.loaded["java_scaffold.health"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke.health"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           java_version = "auto",
@@ -29,7 +29,7 @@ describe("health", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return "23"
       end,
@@ -61,15 +61,15 @@ describe("health", function()
     for level, callback in pairs(original_health) do
       vim.health[level] = callback
     end
-    package.loaded["java_scaffold.health"] = nil
-    package.loaded["java_scaffold.config"] = nil
-    package.loaded["java_scaffold.java"] = nil
+    package.loaded["duke.health"] = nil
+    package.loaded["duke.config"] = nil
+    package.loaded["duke.java"] = nil
     package.loaded.jdtls = original_jdtls_loaded
     package.preload.jdtls = original_jdtls_preload
   end)
 
   it("reports only verified JDK homes and nvim-jdtls module availability", function()
-    require("java_scaffold.health").check()
+    require("duke.health").check()
 
     assert.is_true(vim.tbl_contains(messages.ok, "nvim-jdtls module available"))
     assert.is_true(

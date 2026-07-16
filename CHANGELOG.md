@@ -10,6 +10,23 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Single-dependency Maven Central version updates that preserve all other dependency block content and hide managed versions.
 - Confirmed multi-select removal of root Maven dependency blocks with stale-file protection.
 
+### Changed
+
+- Renamed the plugin from `java-scaffold.nvim` to `duke.nvim`. The Lua module is now `duke`, the health provider is now `duke`, the project-created event is now `DukeProjectCreated`, and existing `stdpath("cache")/java-scaffold.nvim` directories are left orphaned without migration.
+
+| Old command | New command |
+| --- | --- |
+| `:JavaScaffoldNew` | `:DukeNew` |
+| `:JavaScaffoldMaven` | `:DukeMaven` |
+| `:JavaScaffoldGradle` | `:DukeGradle` |
+| `:JavaScaffoldSpring` | `:DukeSpring` |
+| `:JavaScaffoldAddDependency` | `:DukeAdd` |
+| `:JavaScaffoldUpdateDependency` | `:DukeUpgrade` |
+| `:JavaScaffoldRemoveDependency` | `:DukeRemove` |
+| `:JavaScaffoldClearCache` | `:DukeClearCache` |
+| `:JavaScaffoldLog` | `:DukeLog` |
+| `:JavaScaffoldHealth` | `:DukeHealth` |
+
 ## 0.3.1 - 2026-07-16
 
 ### Changed

@@ -3,8 +3,8 @@ describe("config", function()
 
   before_each(function()
     vim.notify = function() end
-    package.loaded["java_scaffold.config"] = nil
-    config = require("java_scaffold.config")
+    package.loaded["duke.config"] = nil
+    config = require("duke.config")
   end)
 
   it("uses workflow defaults without setup", function()

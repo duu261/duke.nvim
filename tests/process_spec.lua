@@ -2,8 +2,8 @@ describe("process runner", function()
   local process
 
   before_each(function()
-    package.loaded["java_scaffold.process"] = nil
-    process = require("java_scaffold.process")
+    package.loaded["duke.process"] = nil
+    process = require("duke.process")
   end)
 
   it("reports startup failures through callback", function()

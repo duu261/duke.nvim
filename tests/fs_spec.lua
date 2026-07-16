@@ -3,8 +3,8 @@ describe("Filesystem staging", function()
   local temporary_directories = {}
 
   before_each(function()
-    package.loaded["java_scaffold.fs"] = nil
-    fs = require("java_scaffold.fs")
+    package.loaded["duke.fs"] = nil
+    fs = require("duke.fs")
   end)
 
   after_each(function()
@@ -29,7 +29,7 @@ describe("Filesystem staging", function()
       assert.is_string(staging)
       assert.equals(parent, vim.fs.dirname(staging))
       assert.is_truthy(vim.uv.fs_stat(staging))
-      assert.is_truthy(staging:match("%.java%-scaffold%-"))
+      assert.is_truthy(staging:match("%.duke%-"))
     end)
 
     it("creates unique names across consecutive calls", function()
@@ -58,7 +58,7 @@ describe("Filesystem staging", function()
       end
 
       -- Pre-create the directory that the first random name would produce
-      local conflict = vim.fs.joinpath(parent, ".java-scaffold-" .. ("ab"):rep(8))
+      local conflict = vim.fs.joinpath(parent, ".duke-" .. ("ab"):rep(8))
       vim.fn.mkdir(conflict, "p")
 
       local staging = fs.make_staging(parent)
@@ -90,7 +90,7 @@ describe("Filesystem staging", function()
     end)
 
     it("does not throw when the path does not exist", function()
-      fs.cleanup("/tmp/java-scaffold-nonexistent-zzz")
+      fs.cleanup("/tmp/duke-nonexistent-zzz")
     end)
   end)
 

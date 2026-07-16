@@ -33,8 +33,7 @@ function M.build_args(opts)
     "--test-framework",
     M.test_framework(opts.java_version, opts.test_framework),
     "--package",
-    opts.package_name
-      or require("java_scaffold.maven").package_name(opts.group_id, opts.artifact_id),
+    opts.package_name or require("duke.maven").package_name(opts.group_id, opts.artifact_id),
     "--into",
     opts.output_directory,
     "--project-name",
@@ -56,12 +55,12 @@ local function generated(path)
 end
 
 function M.create(opts, callback)
-  require("java_scaffold.generator").run(opts, M.adapter, callback)
+  require("duke.generator").run(opts, M.adapter, callback)
 end
 
 M.adapter = {
   validate = function(opts)
-    local maven = require("java_scaffold.maven")
+    local maven = require("duke.maven")
     local err = maven.validate(opts.group_id, opts.artifact_id)
     if err then
       return err
@@ -77,13 +76,13 @@ M.adapter = {
       output_directory = staged_project,
     }))
 
-    require("java_scaffold.process").run(opts.command, args, {
+    require("duke.process").run(opts.command, args, {
       cwd = opts.cwd,
       env = opts.env,
       timeout = opts.timeout,
     }, function(result)
       if result.code ~= 0 then
-        local detail = require("java_scaffold.process").detail(result)
+        local detail = require("duke.process").detail(result)
         callback("Gradle project creation failed: " .. detail)
         return
       end

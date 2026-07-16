@@ -16,7 +16,7 @@ function M.make_staging(parent)
     if not suffix then
       return nil, "cannot create random staging name: " .. tostring(random_error)
     end
-    local path = vim.fs.joinpath(parent, ".java-scaffold-" .. suffix)
+    local path = vim.fs.joinpath(parent, ".duke-" .. suffix)
     local created, mkdir_error = vim.uv.fs_mkdir(path, 448)
     if created then
       return path

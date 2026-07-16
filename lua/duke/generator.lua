@@ -27,7 +27,7 @@ function M.run(opts, adapter, callback)
     return
   end
 
-  local fs = require("java_scaffold.fs")
+  local fs = require("duke.fs")
   local staging, staging_error = fs.make_staging(opts.cwd)
   if not staging then
     callback(staging_error)

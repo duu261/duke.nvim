@@ -2,43 +2,40 @@ local M = {}
 local runtime_cache
 
 local function notify_error(message)
-  require("java_scaffold.log").add("ERROR", message)
-  vim.notify("java-scaffold.nvim: " .. message, vim.log.levels.ERROR)
+  require("duke.log").add("ERROR", message)
+  vim.notify("duke.nvim: " .. message, vim.log.levels.ERROR)
 end
 
 local function notify(message, level)
-  vim.notify("java-scaffold.nvim: " .. message, level or vim.log.levels.INFO)
+  vim.notify("duke.nvim: " .. message, level or vim.log.levels.INFO)
 end
 
 local function finish_project(project_dir)
-  local config = require("java_scaffold.config").get()
-  local entry_file = require("java_scaffold.project").entry(project_dir)
+  local config = require("duke.config").get()
+  local entry_file = require("duke.project").entry(project_dir)
   if config.entry_selector then
     local ok, selected = pcall(config.entry_selector, project_dir, entry_file)
     if ok and type(selected) == "string" and selected ~= "" then
       entry_file = selected
     elseif not ok then
-      require("java_scaffold.log").add("WARN", "entry_selector failed: " .. tostring(selected))
+      require("duke.log").add("WARN", "entry_selector failed: " .. tostring(selected))
     end
   end
   vim.cmd.cd(vim.fn.fnameescape(project_dir))
   local event_ok, event_error = pcall(vim.api.nvim_exec_autocmds, "User", {
-    pattern = "JavaScaffoldProjectCreated",
+    pattern = "DukeProjectCreated",
     data = { project_dir = project_dir, entry_file = entry_file },
   })
   if not event_ok then
-    require("java_scaffold.log").add(
-      "WARN",
-      "project-created event failed: " .. tostring(event_error)
-    )
+    require("duke.log").add("WARN", "project-created event failed: " .. tostring(event_error))
   end
-  require("java_scaffold.handoff").open(project_dir, config.handoff, function(err, opened)
+  require("duke.handoff").open(project_dir, config.handoff, function(err, opened)
     if opened then
       notify("project ready: " .. project_dir)
       return
     end
     if err then
-      require("java_scaffold.log").add("WARN", err)
+      require("duke.log").add("WARN", err)
       notify(err .. "; opening in current Neovim", vim.log.levels.WARN)
     end
     vim.cmd.edit(vim.fn.fnameescape(entry_file))
@@ -46,7 +43,7 @@ local function finish_project(project_dir)
 end
 
 function M.setup(opts)
-  require("java_scaffold.config").setup(opts)
+  require("duke.config").setup(opts)
   runtime_cache = nil
 end
 
@@ -56,8 +53,8 @@ function M.java_runtimes(opts)
     runtime_cache = nil
   end
   if not runtime_cache then
-    local java = require("java_scaffold.java")
-    local config = require("java_scaffold.config").get()
+    local java = require("duke.java")
+    local config = require("duke.config").get()
     runtime_cache = {
       active = java.active(),
       homes = java.discover_homes(config.java_homes),
@@ -113,7 +110,7 @@ function M.new()
     { id = "gradle", name = "Gradle Java" },
     { id = "spring", name = "Spring Boot" },
   }
-  require("java_scaffold.picker").select_one(workflows, {
+  require("duke.picker").select_one(workflows, {
     prompt = "Project generator",
     default = "maven",
     format_item = function(item)
@@ -127,11 +124,11 @@ function M.new()
 end
 
 function M.new_maven()
-  local config = require("java_scaffold.config").get()
-  local wizard = require("java_scaffold.wizard")
+  local config = require("duke.config").get()
+  local wizard = require("duke.wizard")
 
   wizard.sequence(wizard.maven_steps(config), function(state)
-    require("java_scaffold.maven").create({
+    require("duke.maven").create({
       command = config.maven.command,
       cwd = state.destination,
       group_id = state.group_id,
@@ -154,11 +151,11 @@ function M.new_maven()
 end
 
 function M.new_gradle()
-  local config = require("java_scaffold.config").get()
-  local wizard = require("java_scaffold.wizard")
+  local config = require("duke.config").get()
+  local wizard = require("duke.wizard")
 
   wizard.sequence(wizard.gradle_steps(config), function(state)
-    require("java_scaffold.gradle").create({
+    require("duke.gradle").create({
       command = config.gradle.command,
       cwd = state.destination,
       group_id = state.group_id,
@@ -181,38 +178,38 @@ function M.new_gradle()
 end
 
 local function fetch_client(callback)
-  local config = require("java_scaffold.config").get()
-  require("java_scaffold.metadata").fetch_cached(
+  local config = require("duke.config").get()
+  require("duke.metadata").fetch_cached(
     config.spring.metadata_url,
-    require("java_scaffold.metadata").cache_path("metadata", nil, config.spring.metadata_url),
+    require("duke.metadata").cache_path("metadata", nil, config.spring.metadata_url),
     nil,
     callback,
-    require("java_scaffold.metadata").is_client
+    require("duke.metadata").is_client
   )
 end
 
 local function fetch_catalog(boot_version, callback)
-  local config = require("java_scaffold.config").get()
+  local config = require("duke.config").get()
   local url = config.spring.dependencies_url .. "?bootVersion=" .. vim.uri_encode(boot_version)
-  require("java_scaffold.metadata").fetch_cached(
+  require("duke.metadata").fetch_cached(
     url,
-    require("java_scaffold.metadata").cache_path(
+    require("duke.metadata").cache_path(
       "dependencies",
       boot_version,
       config.spring.dependencies_url
     ),
     nil,
     callback,
-    require("java_scaffold.metadata").is_catalog
+    require("duke.metadata").is_catalog
   )
 end
 
 function M.new_spring()
-  local config = require("java_scaffold.config").get()
-  local wizard = require("java_scaffold.wizard")
+  local config = require("duke.config").get()
+  local wizard = require("duke.wizard")
 
   wizard.sequence(wizard.spring_steps(config), function(state)
-    require("java_scaffold.spring").create({
+    require("duke.spring").create({
       url = config.spring.starter_url,
       cwd = state.destination,
       group_id = state.group_id,
@@ -239,7 +236,7 @@ function M.new_spring()
 end
 
 function M.clear_cache()
-  local ok, err = require("java_scaffold.metadata").clear_cache()
+  local ok, err = require("duke.metadata").clear_cache()
   if not ok then
     notify_error(err)
     return false
@@ -282,7 +279,7 @@ local function save_pom(path, lines, buffer, was_modified)
 end
 
 local function insert_maven_dependencies(pom_path, selected)
-  local maven = require("java_scaffold.maven")
+  local maven = require("duke.maven")
   for _, dependency in ipairs(selected) do
     local coordinate_error = maven.validate(dependency.group_id, dependency.artifact_id)
     if coordinate_error then
@@ -295,11 +292,11 @@ local function insert_maven_dependencies(pom_path, selected)
     notify_error("cannot reread " .. pom_path)
     return
   end
-  if require("java_scaffold.pom").spring_boot_version(latest_lines) then
+  if require("duke.pom").spring_boot_version(latest_lines) then
     notify_error("pom.xml became a Spring Boot project; run command again")
     return
   end
-  local updated, added, insert_error = require("java_scaffold.pom").insert(latest_lines, selected)
+  local updated, added, insert_error = require("duke.pom").insert(latest_lines, selected)
   if insert_error then
     notify_error(insert_error)
     return
@@ -319,7 +316,7 @@ local function choose_maven_versions(pom_path, selected)
     return
   end
   local dependency = selected[1]
-  require("java_scaffold.maven_central").versions(
+  require("duke.maven_central").versions(
     dependency.group_id,
     dependency.artifact_id,
     function(err, versions)
@@ -332,7 +329,7 @@ local function choose_maven_versions(pom_path, selected)
       elseif not vim.tbl_contains(versions, dependency.version) then
         table.insert(versions, 1, dependency.version)
       end
-      require("java_scaffold.picker").select_one(versions, {
+      require("duke.picker").select_one(versions, {
         prompt = "Maven Central version",
         default = dependency.version,
       }, function(version)
@@ -341,7 +338,7 @@ local function choose_maven_versions(pom_path, selected)
         end
         local chosen = vim.deepcopy(dependency)
         chosen.version = version
-        require("java_scaffold.picker").select_one({ "compile", "test", "provided", "runtime" }, {
+        require("duke.picker").select_one({ "compile", "test", "provided", "runtime" }, {
           prompt = "Maven dependency scope",
           default = "compile",
         }, function(scope)
@@ -369,15 +366,15 @@ function M.add_dependency()
     notify_error("cannot read " .. pom_path)
     return
   end
-  local boot_version = require("java_scaffold.pom").spring_boot_version(lines)
+  local boot_version = require("duke.pom").spring_boot_version(lines)
   if not boot_version then
-    require("java_scaffold.picker").input("Maven Central search: ", "", function(term)
+    require("duke.picker").input("Maven Central search: ", "", function(term)
       if not term or vim.trim(term) == "" then
         return
       end
       term = vim.trim(term)
       notify("searching Maven Central for " .. term)
-      require("java_scaffold.maven_central").search(term, function(search_error, choices)
+      require("duke.maven_central").search(term, function(search_error, choices)
         if search_error then
           notify_error(search_error)
           return
@@ -386,7 +383,7 @@ function M.add_dependency()
           notify("no Maven Central dependencies found")
           return
         end
-        require("java_scaffold.picker").select_many(choices, {
+        require("duke.picker").select_many(choices, {
           prompt = "Add Maven Central dependencies",
           format_item = function(item)
             return string.format("%s:%s  %s", item.group_id, item.artifact_id, item.version)
@@ -413,7 +410,7 @@ function M.add_dependency()
         notify_error(catalog_error)
         return
       end
-      local metadata = require("java_scaffold.metadata")
+      local metadata = require("duke.metadata")
       local choices = {}
       for _, item in ipairs(metadata.flatten_dependencies(client)) do
         local coordinate = catalog.dependencies and catalog.dependencies[item.id]
@@ -421,7 +418,7 @@ function M.add_dependency()
           choices[#choices + 1] = item
         end
       end
-      require("java_scaffold.picker").select_many(choices, {
+      require("duke.picker").select_many(choices, {
         prompt = "Add Spring dependencies",
         format_item = function(item)
           return string.format("%s  [%s]", item.name, item.group)
@@ -443,13 +440,12 @@ function M.add_dependency()
           notify_error("cannot reread " .. pom_path)
           return
         end
-        local latest_boot_version = require("java_scaffold.pom").spring_boot_version(latest_lines)
+        local latest_boot_version = require("duke.pom").spring_boot_version(latest_lines)
         if latest_boot_version ~= boot_version then
           notify_error("pom.xml Spring Boot version changed; run command again")
           return
         end
-        local updated, added, insert_error =
-          require("java_scaffold.pom").insert(latest_lines, dependencies)
+        local updated, added, insert_error = require("duke.pom").insert(latest_lines, dependencies)
         if insert_error then
           notify_error(insert_error)
           return
@@ -488,7 +484,7 @@ function M.update_dependency()
     notify_error("cannot read " .. pom_path)
     return
   end
-  local dependencies, list_error = require("java_scaffold.pom").list(lines)
+  local dependencies, list_error = require("duke.pom").list(lines)
   if list_error then
     notify_error(list_error)
     return
@@ -514,7 +510,7 @@ function M.update_dependency()
     return
   end
 
-  require("java_scaffold.picker").select_one(choices, {
+  require("duke.picker").select_one(choices, {
     prompt = "Update Maven dependency",
     format_item = function(dependency)
       return string.format("%s  %s", dependency_label(dependency), dependency.version)
@@ -529,7 +525,7 @@ function M.update_dependency()
       return
     end
 
-    require("java_scaffold.maven_central").versions(
+    require("duke.maven_central").versions(
       selected.group_id,
       selected.artifact_id,
       function(version_error, versions)
@@ -544,7 +540,7 @@ function M.update_dependency()
         if not vim.tbl_contains(versions, selected.version) then
           versions[#versions + 1] = selected.version
         end
-        require("java_scaffold.picker").select_one(versions, {
+        require("duke.picker").select_one(versions, {
           prompt = "Maven Central version",
           default = versions[1],
           format_item = function(version)
@@ -564,7 +560,7 @@ function M.update_dependency()
             notify_error("cannot reread " .. pom_path)
             return
           end
-          local latest_dependencies, latest_error = require("java_scaffold.pom").list(latest_lines)
+          local latest_dependencies, latest_error = require("duke.pom").list(latest_lines)
           if latest_error then
             notify_error(latest_error)
             return
@@ -575,7 +571,7 @@ function M.update_dependency()
             return
           end
           local updated, update_error =
-            require("java_scaffold.pom").update_version(latest_lines, latest, version)
+            require("duke.pom").update_version(latest_lines, latest, version)
           if update_error then
             notify_error(update_error)
             return
@@ -602,7 +598,7 @@ function M.remove_dependency()
     notify_error("cannot read " .. pom_path)
     return
   end
-  local dependencies, list_error = require("java_scaffold.pom").list(lines)
+  local dependencies, list_error = require("duke.pom").list(lines)
   if list_error then
     notify_error(list_error)
     return
@@ -612,7 +608,7 @@ function M.remove_dependency()
     return
   end
 
-  require("java_scaffold.picker").select_many(dependencies, {
+  require("duke.picker").select_many(dependencies, {
     prompt = "Remove Maven dependencies",
     format_item = dependency_label,
   }, function(selected)
@@ -623,7 +619,7 @@ function M.remove_dependency()
       return "- " .. dependency_label(dependency)
     end, selected)
     local confirmation = "Remove dependencies?\n\n" .. table.concat(labels, "\n")
-    if not require("java_scaffold.picker").confirm(confirmation, "Remove") then
+    if not require("duke.picker").confirm(confirmation, "Remove") then
       return
     end
 
@@ -632,7 +628,7 @@ function M.remove_dependency()
       notify_error("cannot reread " .. pom_path)
       return
     end
-    local latest_dependencies, latest_error = require("java_scaffold.pom").list(latest_lines)
+    local latest_dependencies, latest_error = require("duke.pom").list(latest_lines)
     if latest_error then
       notify_error(latest_error)
       return
@@ -647,8 +643,7 @@ function M.remove_dependency()
       latest_selected[#latest_selected + 1] = latest
     end
 
-    local updated, removed, remove_error =
-      require("java_scaffold.pom").remove(latest_lines, latest_selected)
+    local updated, removed, remove_error = require("duke.pom").remove(latest_lines, latest_selected)
     if remove_error then
       notify_error(remove_error)
       return

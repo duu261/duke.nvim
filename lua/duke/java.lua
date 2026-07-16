@@ -1,9 +1,9 @@
 ---Public API facade. Delegates to java_version (pure parsing) and java_home (I/O + discovery).
----@see java_scaffold.java_version
----@see java_scaffold.java_home
+---@see duke.java_version
+---@see duke.java_home
 
-local version = require("java_scaffold.java_version")
-local home = require("java_scaffold.java_home")
+local version = require("duke.java_version")
+local home = require("duke.java_home")
 
 return {
   -- Version parsing (pure)

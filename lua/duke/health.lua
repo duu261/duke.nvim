@@ -11,7 +11,7 @@ local function executable(name, required)
 end
 
 function M.check()
-  vim.health.start("java-scaffold.nvim")
+  vim.health.start("duke.nvim")
 
   if vim.fn.has("nvim-0.11") == 1 then
     vim.health.ok("Neovim >= 0.11")
@@ -19,14 +19,14 @@ function M.check()
     vim.health.error("Neovim >= 0.11 required")
   end
 
-  local config = require("java_scaffold.config").get()
+  local config = require("duke.config").get()
   executable("java", true)
   executable(config.maven.command, true)
   executable(config.gradle.command, false)
   executable("curl", true)
   executable("tar", true)
 
-  local java = require("java_scaffold.java")
+  local java = require("duke.java")
   local java_version = java.active()
   if java_version then
     vim.health.ok("active Java: " .. java_version)
@@ -88,7 +88,7 @@ function M.check()
     end
   end
 
-  local cache_dir = vim.fs.joinpath(vim.fn.stdpath("cache"), "java-scaffold.nvim")
+  local cache_dir = vim.fs.joinpath(vim.fn.stdpath("cache"), "duke.nvim")
   vim.fn.mkdir(cache_dir, "p")
   if vim.fn.filewritable(cache_dir) == 2 then
     vim.health.ok("metadata cache writable: " .. cache_dir)

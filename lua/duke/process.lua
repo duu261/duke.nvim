@@ -1,11 +1,8 @@
 local M = {}
 
 local function report_callback_error(err)
-  require("java_scaffold.log").add("ERROR", "process callback failed: " .. tostring(err))
-  vim.notify(
-    "java-scaffold.nvim: internal callback failed; run :JavaScaffoldLog",
-    vim.log.levels.ERROR
-  )
+  require("duke.log").add("ERROR", "process callback failed: " .. tostring(err))
+  vim.notify("duke.nvim: internal callback failed; run :DukeLog", vim.log.levels.ERROR)
 end
 
 function M.detail(result, fallback)
@@ -23,7 +20,7 @@ function M.run(command, args, opts, callback)
   local command_args = { command }
   vim.list_extend(command_args, args or {})
 
-  require("java_scaffold.log").add("DEBUG", "run: " .. table.concat(command_args, " "))
+  require("duke.log").add("DEBUG", "run: " .. table.concat(command_args, " "))
 
   local started, handle = pcall(vim.system, command_args, {
     cwd = opts.cwd,

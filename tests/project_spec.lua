@@ -3,8 +3,8 @@ describe("project entry", function()
   local root
 
   before_each(function()
-    package.loaded["java_scaffold.project"] = nil
-    project = require("java_scaffold.project")
+    package.loaded["duke.project"] = nil
+    project = require("duke.project")
     root = vim.fn.tempname()
     vim.fn.mkdir(root, "p")
   end)

@@ -3,12 +3,12 @@ describe("Gradle scaffolding", function()
   local temporary_directories = {}
 
   before_each(function()
-    package.loaded["java_scaffold.gradle"] = nil
-    gradle = require("java_scaffold.gradle")
+    package.loaded["duke.gradle"] = nil
+    gradle = require("duke.gradle")
   end)
 
   after_each(function()
-    package.loaded["java_scaffold.process"] = nil
+    package.loaded["duke.process"] = nil
     for _, path in ipairs(temporary_directories) do
       vim.fn.delete(path, "rf")
     end
@@ -77,7 +77,7 @@ describe("Gradle scaffolding", function()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
     local project_dir
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, process_options, callback)
         assert.equals("/jdk/23", process_options.env.JAVA_HOME)
         local into_index = vim.fn.index(args, "--into") + 1
@@ -99,7 +99,7 @@ describe("Gradle scaffolding", function()
 
     assert.equals(vim.fs.joinpath(cwd, "demo-api"), project_dir)
     assert.equals(1, vim.fn.filereadable(vim.fs.joinpath(project_dir, "build.gradle.kts")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("accepts Gradle's generated application subproject layout", function()
@@ -107,7 +107,7 @@ describe("Gradle scaffolding", function()
     vim.fn.mkdir(cwd, "p")
     temporary_directories[#temporary_directories + 1] = cwd
     local project_dir
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, _, callback)
         local into_index = vim.fn.index(args, "--into") + 1
         local generated = args[into_index + 1]

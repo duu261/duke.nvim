@@ -3,8 +3,8 @@ describe("Generator pipeline", function()
   local temporary_directories = {}
 
   before_each(function()
-    package.loaded["java_scaffold.generator"] = nil
-    generator = require("java_scaffold.generator")
+    package.loaded["duke.generator"] = nil
+    generator = require("duke.generator")
   end)
 
   after_each(function()
@@ -87,7 +87,7 @@ describe("Generator pipeline", function()
 
     assert.equals(vim.fs.joinpath(cwd, "demo"), project_dir)
     assert.equals(1, vim.fn.filereadable(vim.fs.joinpath(project_dir, "build.file")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("cleans up staging and does not promote on execute error", function()
@@ -108,7 +108,7 @@ describe("Generator pipeline", function()
 
     assert.equals("build tool crashed", received_error)
     assert.is_nil(vim.uv.fs_stat(vim.fs.joinpath(cwd, "demo")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("preserves a target that appears during generation", function()
@@ -136,7 +136,7 @@ describe("Generator pipeline", function()
 
     assert.matches("target already exists", received_error)
     assert.equals("keep", vim.fn.readfile(vim.fs.joinpath(cwd, "demo", "sentinel"))[1])
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("passes full opts through to the adapter", function()

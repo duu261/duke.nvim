@@ -35,9 +35,9 @@ function M.open(project_dir, opts, callback, entry_file)
   end
 
   local command = M.command(project_dir, opts.command, entry_file)
-  require("java_scaffold.process").run(command[1], vim.list_slice(command, 2), {}, function(result)
+  require("duke.process").run(command[1], vim.list_slice(command, 2), {}, function(result)
     if result.code ~= 0 then
-      callback("project handoff failed: " .. require("java_scaffold.process").detail(result), false)
+      callback("project handoff failed: " .. require("duke.process").detail(result), false)
       return
     end
     callback(nil, true)

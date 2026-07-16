@@ -4,16 +4,16 @@ local M = {}
 -- Pattern matches init.lua and every other module in the codebase.
 
 local function get_runtimes(_)
-  return require("java_scaffold").java_runtimes()
+  return require("duke").java_runtimes()
 end
 
 local function notify_error(message)
-  require("java_scaffold.log").add("ERROR", message)
-  vim.notify("java-scaffold.nvim: " .. message, vim.log.levels.ERROR)
+  require("duke.log").add("ERROR", message)
+  vim.notify("duke.nvim: " .. message, vim.log.levels.ERROR)
 end
 
 local function notify(message, level)
-  vim.notify("java-scaffold.nvim: " .. message, level or vim.log.levels.INFO)
+  vim.notify("duke.nvim: " .. message, level or vim.log.levels.INFO)
 end
 
 -- Engine: runs steps sequentially. Each step is fn(state, callback).
@@ -45,11 +45,11 @@ function M.sequence(steps, on_complete)
   next_step()
 end
 
--- Built-in steps: thin wrappers around require("java_scaffold.picker").
+-- Built-in steps: thin wrappers around require("duke.picker").
 
 function M.select_one(items, opts, state_key)
   return function(state, callback)
-    require("java_scaffold.picker").select_one(items, opts, function(choice)
+    require("duke.picker").select_one(items, opts, function(choice)
       if not choice then
         callback(nil)
         return
@@ -62,7 +62,7 @@ end
 
 function M.select_many(items, opts, state_key)
   return function(state, callback)
-    require("java_scaffold.picker").select_many(items, opts, function(selected)
+    require("duke.picker").select_many(items, opts, function(selected)
       if not selected then
         callback(nil)
         return
@@ -76,7 +76,7 @@ end
 function M.input(prompt, default, state_key, opts)
   opts = opts or {}
   return function(state, callback)
-    require("java_scaffold.picker").input(prompt, default, function(value)
+    require("duke.picker").input(prompt, default, function(value)
       if value == nil then
         callback(nil)
         return
@@ -98,7 +98,7 @@ function M.confirm(title, fields_fn)
     for _, field in ipairs(fields) do
       lines[#lines + 1] = field[1] .. ": " .. tostring(field[2])
     end
-    local confirmed = require("java_scaffold.picker").confirm(table.concat(lines, "\n"))
+    local confirmed = require("duke.picker").confirm(table.concat(lines, "\n"))
     if not confirmed then
       callback(nil)
       return
@@ -111,47 +111,43 @@ end
 
 function M.project_dir(_)
   return function(state, callback)
-    require("java_scaffold.picker").input(
-      "Destination directory: ",
-      vim.fn.getcwd(),
-      function(value)
-        if value == nil then
-          callback(nil)
-          return
-        end
-        value = vim.trim(value)
-        if value == "" then
-          notify_error("destination directory is required")
-          callback(nil)
-          return
-        end
-        local destination = vim.fs.normalize(vim.fn.fnamemodify(value, ":p"))
-        if vim.fn.isdirectory(destination) ~= 1 then
-          notify_error("destination directory does not exist: " .. destination)
-          callback(nil)
-          return
-        end
-        state.destination = destination
-        callback(state)
+    require("duke.picker").input("Destination directory: ", vim.fn.getcwd(), function(value)
+      if value == nil then
+        callback(nil)
+        return
       end
-    )
+      value = vim.trim(value)
+      if value == "" then
+        notify_error("destination directory is required")
+        callback(nil)
+        return
+      end
+      local destination = vim.fs.normalize(vim.fn.fnamemodify(value, ":p"))
+      if vim.fn.isdirectory(destination) ~= 1 then
+        notify_error("destination directory does not exist: " .. destination)
+        callback(nil)
+        return
+      end
+      state.destination = destination
+      callback(state)
+    end)
   end
 end
 
 function M.coordinates(config)
   return function(state, callback)
     local artifact_default = state._artifact_default or config.artifact_id
-    require("java_scaffold.picker").input("Group ID: ", config.group_id, function(group_id)
+    require("duke.picker").input("Group ID: ", config.group_id, function(group_id)
       if not group_id then
         callback(nil)
         return
       end
-      require("java_scaffold.picker").input("Artifact ID: ", artifact_default, function(artifact_id)
+      require("duke.picker").input("Artifact ID: ", artifact_default, function(artifact_id)
         if not artifact_id then
           callback(nil)
           return
         end
-        local err = require("java_scaffold.maven").validate(group_id, artifact_id)
+        local err = require("duke.maven").validate(group_id, artifact_id)
         if err then
           notify_error(err)
           callback(nil)
@@ -167,9 +163,9 @@ end
 
 function M.package_name(_)
   return function(state, callback)
-    local maven = require("java_scaffold.maven")
+    local maven = require("duke.maven")
     local derived = maven.package_name(state.group_id, state.artifact_id)
-    require("java_scaffold.picker").input("Package name: ", derived, function(package_name)
+    require("duke.picker").input("Package name: ", derived, function(package_name)
       if package_name == nil then
         callback(nil)
         return
@@ -192,7 +188,7 @@ end
 
 function M.java_version(config)
   return function(state, callback)
-    local java = require("java_scaffold.java")
+    local java = require("duke.java")
     local runtimes = get_runtimes(config)
     local versions = java.installed(config.java_versions, config.java_homes, runtimes)
     if #versions == 0 then
@@ -201,7 +197,7 @@ function M.java_version(config)
       return
     end
     local selected_default = java.default(config.java_version, versions, runtimes.active)
-    require("java_scaffold.picker").select_one(versions, {
+    require("duke.picker").select_one(versions, {
       prompt = "Java version",
       default = selected_default,
     }, function(java_version)
@@ -219,7 +215,7 @@ end
 
 function M.runner_preview(config, build_tool)
   return function(state, callback)
-    local java = require("java_scaffold.java")
+    local java = require("duke.java")
     local versions = state._versions
     local runtimes = state._runtimes
     if not versions then
@@ -237,7 +233,7 @@ end
 
 function M.runner_check(config, build_tool)
   return function(state, callback)
-    local java = require("java_scaffold.java")
+    local java = require("duke.java")
     local runtimes = state._runtimes or get_runtimes(config)
     local versions = state._versions
       or java.installed(config.java_versions, config.java_homes, runtimes)
@@ -287,8 +283,7 @@ end
 
 function M.gradle_project_type(_)
   return function(state, callback)
-    local init_type =
-      require("java_scaffold.gradle").project_type(state.language, state.project_type.id)
+    local init_type = require("duke.gradle").project_type(state.language, state.project_type.id)
     if not init_type then
       notify_error("unsupported Gradle source language and project type combination")
       callback(nil)
@@ -301,7 +296,7 @@ end
 
 function M.spring_java_version(config)
   return function(state, callback)
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     local client = state.spring_client
     local versions = metadata.values(client, "javaVersion")
     if #versions == 0 then
@@ -310,9 +305,8 @@ function M.spring_java_version(config)
       return
     end
     local fallback = metadata.default(client, "javaVersion", versions[#versions])
-    local default_version =
-      require("java_scaffold.java").default(config.java_version, versions, fallback)
-    require("java_scaffold.picker").select_one(versions, {
+    local default_version = require("duke.java").default(config.java_version, versions, fallback)
+    require("duke.picker").select_one(versions, {
       prompt = "Java version",
       default = default_version,
     }, function(java_version)
@@ -329,7 +323,7 @@ end
 function M.spring_metadata_fetch(config)
   return function(state, callback)
     notify("loading Spring Initializr metadata")
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     metadata.fetch_cached(
       config.spring.metadata_url,
       metadata.cache_path("metadata", nil, config.spring.metadata_url),
@@ -350,14 +344,14 @@ end
 
 function M.spring_boot_version(_)
   return function(state, callback)
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     local client = state.spring_client
     local boot_versions = metadata.values(client, "bootVersion")
     local default_boot = metadata.default(client, "bootVersion")
     if #boot_versions == 0 and default_boot then
       boot_versions = { default_boot }
     end
-    require("java_scaffold.picker").select_one(boot_versions, {
+    require("duke.picker").select_one(boot_versions, {
       prompt = "Spring Boot version",
       default = default_boot,
     }, function(boot_version)
@@ -373,7 +367,7 @@ end
 
 function M.spring_project_type(config)
   return function(state, callback)
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     local project_types = metadata.project_types(state.spring_client)
     if #project_types == 0 then
       state.spring_project_type = {
@@ -383,7 +377,7 @@ function M.spring_project_type(config)
       callback(state)
       return
     end
-    require("java_scaffold.picker").select_one(project_types, {
+    require("duke.picker").select_one(project_types, {
       prompt = "Spring project type",
       default = config.spring.project_type,
       format_item = function(item)
@@ -401,16 +395,16 @@ function M.spring_project_type(config)
 end
 
 function M.spring_fields(_)
-  local maven = require("java_scaffold.maven")
+  local maven = require("duke.maven")
   return function(state, callback)
     local derived_package = maven.package_name(state.group_id, state.artifact_id)
-    require("java_scaffold.picker").input("Project name: ", state.artifact_id, function(name)
+    require("duke.picker").input("Project name: ", state.artifact_id, function(name)
       if name == nil then
         callback(nil)
         return
       end
       state.name = vim.trim(name) ~= "" and vim.trim(name) or state.artifact_id
-      require("java_scaffold.picker").input(
+      require("duke.picker").input(
         "Description: ",
         "Demo project for Spring Boot",
         function(description)
@@ -419,28 +413,24 @@ function M.spring_fields(_)
             return
           end
           state.description = vim.trim(description)
-          require("java_scaffold.picker").input(
-            "Package name: ",
-            derived_package,
-            function(package_name)
-              if package_name == nil then
-                callback(nil)
-                return
-              end
-              package_name = vim.trim(package_name)
-              if package_name == "" then
-                package_name = derived_package
-              end
-              local package_error = maven.validate_package(package_name)
-              if package_error then
-                notify_error(package_error)
-                callback(nil)
-                return
-              end
-              state.package_name = package_name
-              callback(state)
+          require("duke.picker").input("Package name: ", derived_package, function(package_name)
+            if package_name == nil then
+              callback(nil)
+              return
             end
-          )
+            package_name = vim.trim(package_name)
+            if package_name == "" then
+              package_name = derived_package
+            end
+            local package_error = maven.validate_package(package_name)
+            if package_error then
+              notify_error(package_error)
+              callback(nil)
+              return
+            end
+            state.package_name = package_name
+            callback(state)
+          end)
         end
       )
     end)
@@ -449,7 +439,7 @@ end
 
 function M.spring_dependencies(_)
   return function(state, callback)
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     local catalog = state.spring_catalog
     local client = state.spring_client
     local dependencies = {}
@@ -458,7 +448,7 @@ function M.spring_dependencies(_)
         dependencies[#dependencies + 1] = item
       end
     end
-    require("java_scaffold.picker").select_many(dependencies, {
+    require("duke.picker").select_many(dependencies, {
       prompt = "Spring dependencies",
       format_item = function(item)
         return string.format("%s  [%s]", item.name, item.group)
@@ -478,10 +468,10 @@ end
 
 function M.spring_options(config)
   return function(state, callback)
-    local metadata = require("java_scaffold.metadata")
+    local metadata = require("duke.metadata")
     local client = state.spring_client
     local languages = metadata.values(client, "language")
-    require("java_scaffold.picker").select_one(languages, {
+    require("duke.picker").select_one(languages, {
       prompt = "Spring language",
       default = config.spring.language,
     }, function(language)
@@ -491,7 +481,7 @@ function M.spring_options(config)
       end
       state.spring_language = language
       local packaging_options = metadata.values(client, "packaging")
-      require("java_scaffold.picker").select_one(packaging_options, {
+      require("duke.picker").select_one(packaging_options, {
         prompt = "Spring packaging",
         default = config.spring.packaging,
       }, function(packaging)
@@ -590,7 +580,7 @@ function M.spring_steps(config)
   return {
     M.spring_metadata_fetch(config),
     function(state, callback)
-      local metadata = require("java_scaffold.metadata")
+      local metadata = require("duke.metadata")
       state._artifact_default = metadata.default(state.spring_client, "artifactId", "demo")
       callback(state)
     end,
@@ -602,7 +592,7 @@ function M.spring_steps(config)
     M.spring_fields(config),
     function(state, callback)
       -- fetch catalog between fields and dependency picker
-      local metadata = require("java_scaffold.metadata")
+      local metadata = require("duke.metadata")
       local url = config.spring.dependencies_url
         .. "?bootVersion="
         .. vim.uri_encode(state.boot_version)

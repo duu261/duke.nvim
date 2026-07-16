@@ -3,12 +3,12 @@ describe("Maven scaffolding", function()
   local temporary_directories = {}
 
   before_each(function()
-    package.loaded["java_scaffold.maven"] = nil
-    maven = require("java_scaffold.maven")
+    package.loaded["duke.maven"] = nil
+    maven = require("duke.maven")
   end)
 
   after_each(function()
-    package.loaded["java_scaffold.process"] = nil
+    package.loaded["duke.process"] = nil
     for _, path in ipairs(temporary_directories) do
       vim.fn.delete(path, "rf")
     end
@@ -123,7 +123,7 @@ describe("Maven scaffolding", function()
     local cwd = temporary_directory()
     local callback_error
     local project_dir
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, process_options, callback)
         assert.equals("/jdk/21", process_options.env.JAVA_HOME)
         local output = vim.iter(args):find(function(arg)
@@ -146,13 +146,13 @@ describe("Maven scaffolding", function()
     assert.is_nil(callback_error)
     assert.equals(vim.fs.joinpath(cwd, "demo-api"), project_dir)
     assert.equals(1, vim.fn.filereadable(vim.fs.joinpath(project_dir, "pom.xml")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("preserves a target created while Maven runs", function()
     local cwd = temporary_directory()
     local callback_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, _, callback)
         local output = vim.iter(args):find(function(arg)
           return arg:match("^-DoutputDirectory=")
@@ -181,7 +181,7 @@ describe("Maven scaffolding", function()
     local runs = 0
     local project_dir
     local staged_project
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, process_options, callback)
         runs = runs + 1
         if runs == 1 then
@@ -235,7 +235,7 @@ describe("Maven scaffolding", function()
     local cwd = temporary_directory()
     local runs = 0
     local callback_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, _, callback)
         runs = runs + 1
         if runs == 1 then
@@ -265,14 +265,14 @@ describe("Maven scaffolding", function()
     assert.equals(2, runs)
     assert.matches("Maven Wrapper generation failed: wrapper failed", callback_error)
     assert.is_nil(vim.uv.fs_stat(vim.fs.joinpath(cwd, "demo-api")))
-    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".duke-*"), false, true))
   end)
 
   it("rejects incomplete Maven Wrapper output", function()
     local cwd = temporary_directory()
     local runs = 0
     local callback_error
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, args, process_options, callback)
         runs = runs + 1
         if runs == 1 then

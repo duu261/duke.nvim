@@ -2,8 +2,8 @@ describe("Initializr metadata", function()
   local metadata
 
   before_each(function()
-    package.loaded["java_scaffold.metadata"] = nil
-    metadata = require("java_scaffold.metadata")
+    package.loaded["duke.metadata"] = nil
+    metadata = require("duke.metadata")
   end)
 
   it("flattens grouped dependencies", function()
@@ -106,11 +106,11 @@ describe("Initializr metadata", function()
   end)
 
   it("reports Initializr JSON error messages", function()
-    local saved_process = package.loaded["java_scaffold.process"]
+    local saved_process = package.loaded["duke.process"]
     local received_error
     local expected_error = "Invalid Spring Boot version '3.3.4', "
       .. "Spring Boot compatibility range is >=4.0.0"
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(_, _, _, callback)
         callback({
           code = 22,
@@ -127,15 +127,15 @@ describe("Initializr metadata", function()
     metadata.http_get("https://start.spring.io/dependencies?bootVersion=3.3.4", function(err)
       received_error = err
     end)
-    package.loaded["java_scaffold.process"] = saved_process
+    package.loaded["duke.process"] = saved_process
 
     assert.equals(expected_error, received_error)
   end)
 
   it("pins Initializr requests to HTTPS", function()
-    local saved_process = package.loaded["java_scaffold.process"]
+    local saved_process = package.loaded["duke.process"]
     local received_args
-    package.loaded["java_scaffold.process"] = {
+    package.loaded["duke.process"] = {
       run = function(command, args, _, callback)
         assert.equals("curl", command)
         received_args = args
@@ -144,7 +144,7 @@ describe("Initializr metadata", function()
     }
 
     metadata.http_get("https://start.spring.io/metadata/client", function() end)
-    package.loaded["java_scaffold.process"] = saved_process
+    package.loaded["duke.process"] = saved_process
 
     assert.equals("--proto", received_args[3])
     assert.equals("=https", received_args[4])

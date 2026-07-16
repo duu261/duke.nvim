@@ -60,10 +60,7 @@ local function write_cache(path, raw)
   end
   local random, random_error = vim.uv.random(8)
   if not random then
-    require("java_scaffold.log").add(
-      "WARN",
-      "metadata cache name failed: " .. tostring(random_error)
-    )
+    require("duke.log").add("WARN", "metadata cache name failed: " .. tostring(random_error))
     return
   end
   local suffix = random:gsub(".", function(char)
@@ -72,21 +69,18 @@ local function write_cache(path, raw)
   local temporary = path .. ".tmp-" .. suffix
   local ok, err = pcall(vim.fn.writefile, vim.split(raw, "\n", { plain = true }), temporary)
   if not ok then
-    require("java_scaffold.log").add("WARN", "metadata cache write failed: " .. tostring(err))
+    require("duke.log").add("WARN", "metadata cache write failed: " .. tostring(err))
     return
   end
   local renamed, rename_error = vim.uv.fs_rename(temporary, path)
   if not renamed then
     pcall(vim.fn.delete, temporary)
-    require("java_scaffold.log").add(
-      "WARN",
-      "metadata cache replace failed: " .. tostring(rename_error)
-    )
+    require("duke.log").add("WARN", "metadata cache replace failed: " .. tostring(rename_error))
   end
 end
 
 function M.http_get(url, callback)
-  require("java_scaffold.process").run("curl", {
+  require("duke.process").run("curl", {
     "--fail-with-body",
     "--location",
     "--proto",
@@ -96,9 +90,9 @@ function M.http_get(url, callback)
     "--header",
     "Accept: application/vnd.initializr.v2.3+json",
     "--user-agent",
-    "java-scaffold.nvim",
+    "duke.nvim",
     url,
-  }, { timeout = require("java_scaffold.config").get().spring.metadata_timeout }, function(result)
+  }, { timeout = require("duke.config").get().spring.metadata_timeout }, function(result)
     if result.code ~= 0 then
       local stderr = vim.trim(result.stderr or "")
       local stdout = vim.trim(result.stdout or "")
@@ -129,7 +123,7 @@ function M.fetch_cached(url, cache_path, runner, callback, validator)
 
     local cached, cache_error = read_cache(cache_path, validator)
     if cached then
-      require("java_scaffold.log").add("WARN", "using cached Initializr metadata")
+      require("duke.log").add("WARN", "using cached Initializr metadata")
       callback(nil, cached, "cache")
       return
     end
@@ -138,7 +132,7 @@ function M.fetch_cached(url, cache_path, runner, callback, validator)
 end
 
 function M.cache_dir()
-  return vim.fs.joinpath(vim.fn.stdpath("cache"), "java-scaffold.nvim")
+  return vim.fs.joinpath(vim.fn.stdpath("cache"), "duke.nvim")
 end
 
 function M.cache_path(kind, version, url)

@@ -147,7 +147,7 @@ local function wrapper_args()
 end
 
 function M.create(opts, callback)
-  require("java_scaffold.generator").run(opts, M.adapter, callback)
+  require("duke.generator").run(opts, M.adapter, callback)
 end
 
 M.adapter = {
@@ -162,7 +162,7 @@ M.adapter = {
   execute = function(opts, staging, callback)
     local staged_project = vim.fs.joinpath(staging, opts.artifact_id)
     local args = M.build_args(vim.tbl_extend("force", opts, { output_directory = staging }))
-    local process = require("java_scaffold.process")
+    local process = require("duke.process")
 
     local function generate_wrapper()
       process.run(

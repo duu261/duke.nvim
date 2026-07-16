@@ -2,8 +2,8 @@ describe("Maven Central search", function()
   local search
 
   before_each(function()
-    package.loaded["java_scaffold.maven_central"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke.maven_central"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           maven = {
@@ -14,12 +14,12 @@ describe("Maven Central search", function()
         }
       end,
     }
-    search = require("java_scaffold.maven_central")
+    search = require("duke.maven_central")
   end)
 
   after_each(function()
-    package.loaded["java_scaffold.config"] = nil
-    package.loaded["java_scaffold.maven_central"] = nil
+    package.loaded["duke.config"] = nil
+    package.loaded["duke.maven_central"] = nil
   end)
 
   it("builds encoded HTTPS curl search args", function()
@@ -38,7 +38,7 @@ describe("Maven Central search", function()
       "--data-urlencode",
       "wt=json",
       "--user-agent",
-      "java-scaffold.nvim",
+      "duke.nvim",
       "https://search.maven.org/solrsearch/select",
     }, search.build_search_args("https://search.maven.org/solrsearch/select", "guava core", 20))
   end)

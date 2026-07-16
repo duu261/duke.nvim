@@ -20,7 +20,7 @@ function M.build_search_args(url, term, rows)
     "--data-urlencode",
     "wt=json",
     "--user-agent",
-    "java-scaffold.nvim",
+    "duke.nvim",
     url,
   }
 end
@@ -45,7 +45,7 @@ function M.build_versions_args(url, group_id, artifact_id, rows)
     "--data-urlencode",
     "wt=json",
     "--user-agent",
-    "java-scaffold.nvim",
+    "duke.nvim",
     url,
   }
 end
@@ -76,8 +76,8 @@ local function process_error(result)
 end
 
 local function request(args, callback, runner)
-  local config = require("java_scaffold.config").get().maven
-  runner = runner or require("java_scaffold.process").run
+  local config = require("duke.config").get().maven
+  runner = runner or require("duke.process").run
   runner("curl", args, { timeout = config.central_search_timeout }, function(result)
     if result.code ~= 0 then
       callback(process_error(result))
@@ -93,7 +93,7 @@ local function request(args, callback, runner)
 end
 
 function M.search(term, callback, runner)
-  local config = require("java_scaffold.config").get().maven
+  local config = require("duke.config").get().maven
   request(
     M.build_search_args(config.central_search_url, term, config.central_search_rows),
     function(err, docs)
@@ -126,7 +126,7 @@ function M.search(term, callback, runner)
 end
 
 function M.versions(group_id, artifact_id, callback, runner)
-  local config = require("java_scaffold.config").get().maven
+  local config = require("duke.config").get().maven
   request(
     M.build_versions_args(
       config.central_search_url,

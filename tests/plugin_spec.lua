@@ -6,22 +6,22 @@ describe("plugin surface", function()
   before_each(function()
     original_cwd = vim.fn.getcwd()
     original_notify = vim.notify
-    vim.g.loaded_java_scaffold = nil
-    package.loaded["java_scaffold"] = nil
-    vim.cmd("runtime plugin/java-scaffold.lua")
+    vim.g.loaded_duke = nil
+    package.loaded["duke"] = nil
+    vim.cmd("runtime plugin/duke.lua")
   end)
 
   after_each(function()
     vim.notify = original_notify
-    package.loaded["java_scaffold.config"] = nil
-    package.loaded["java_scaffold.gradle"] = nil
-    package.loaded["java_scaffold.java"] = nil
-    package.loaded["java_scaffold.maven"] = nil
-    package.loaded["java_scaffold.maven_central"] = nil
-    package.loaded["java_scaffold.metadata"] = nil
-    package.loaded["java_scaffold.picker"] = nil
-    package.loaded["java_scaffold.pom"] = nil
-    package.loaded["java_scaffold.spring"] = nil
+    package.loaded["duke.config"] = nil
+    package.loaded["duke.gradle"] = nil
+    package.loaded["duke.java"] = nil
+    package.loaded["duke.maven"] = nil
+    package.loaded["duke.maven_central"] = nil
+    package.loaded["duke.metadata"] = nil
+    package.loaded["duke.picker"] = nil
+    package.loaded["duke.pom"] = nil
+    package.loaded["duke.spring"] = nil
     vim.cmd.cd(vim.fn.fnameescape(original_cwd))
     for _, path in ipairs(temporary_directories) do
       vim.fn.delete(path, "rf")
@@ -30,20 +30,20 @@ describe("plugin surface", function()
   end)
 
   it("registers lazy user commands", function()
-    assert.equals(2, vim.fn.exists(":JavaScaffoldNew"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldMaven"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldGradle"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldSpring"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldAddDependency"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldUpdateDependency"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldRemoveDependency"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldClearCache"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldLog"))
-    assert.equals(2, vim.fn.exists(":JavaScaffoldHealth"))
+    assert.equals(2, vim.fn.exists(":DukeNew"))
+    assert.equals(2, vim.fn.exists(":DukeMaven"))
+    assert.equals(2, vim.fn.exists(":DukeGradle"))
+    assert.equals(2, vim.fn.exists(":DukeSpring"))
+    assert.equals(2, vim.fn.exists(":DukeAdd"))
+    assert.equals(2, vim.fn.exists(":DukeUpgrade"))
+    assert.equals(2, vim.fn.exists(":DukeRemove"))
+    assert.equals(2, vim.fn.exists(":DukeClearCache"))
+    assert.equals(2, vim.fn.exists(":DukeLog"))
+    assert.equals(2, vim.fn.exists(":DukeHealth"))
   end)
 
   it("loads public API without setup", function()
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
     assert.is_function(plugin.new)
     assert.is_function(plugin.new_maven)
     assert.is_function(plugin.new_gradle)
@@ -59,7 +59,7 @@ describe("plugin surface", function()
   it("routes the unified workflow picker to each generator", function()
     local selected_index = 0
     local routed = {}
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, opts, callback)
         selected_index = selected_index + 1
         assert.equals("Project generator", opts.prompt)
@@ -74,7 +74,7 @@ describe("plugin surface", function()
       end,
     }
 
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
     plugin.new_maven = function()
       routed[#routed + 1] = "maven"
     end
@@ -123,7 +123,7 @@ describe("plugin surface", function()
       },
       dependencies = { values = {} },
     }
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -141,12 +141,12 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       default = function(configured)
         return configured
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -157,7 +157,7 @@ describe("plugin surface", function()
         return nil
       end,
     }
-    package.loaded["java_scaffold.metadata"] = {
+    package.loaded["duke.metadata"] = {
       cache_path = function(kind)
         return kind
       end,
@@ -193,7 +193,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         local values = {
           ["Destination directory: "] = destination,
@@ -225,13 +225,13 @@ describe("plugin surface", function()
         callback({})
       end,
     }
-    package.loaded["java_scaffold.spring"] = {
+    package.loaded["duke.spring"] = {
       create = function(opts)
         received.create = opts
       end,
     }
 
-    require("java_scaffold").new_spring()
+    require("duke").new_spring()
 
     assert.same(
       { items = { "java", "kotlin", "groovy" }, default = "java" },
@@ -270,7 +270,7 @@ describe("plugin surface", function()
     vim.cmd("enew!")
     local received = {}
 
-    package.loaded["java_scaffold.pom"] = {
+    package.loaded["duke.pom"] = {
       spring_boot_version = function()
         return nil
       end,
@@ -280,12 +280,12 @@ describe("plugin surface", function()
         return lines, #dependencies
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function(group_id, artifact_id)
         received.validated = group_id .. ":" .. artifact_id
       end,
     }
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       search = function(term, callback)
         received.term = term
         callback(nil, {
@@ -302,7 +302,7 @@ describe("plugin surface", function()
         callback(nil, { "33.4.8-jre", "33.4.7-jre" })
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(_, _, callback)
         callback("guava")
       end,
@@ -337,7 +337,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").add_dependency()
+    require("duke").add_dependency()
 
     assert.equals("guava", received.term)
     assert.equals("com.google.guava:guava", received.version_coordinates)
@@ -366,7 +366,7 @@ describe("plugin surface", function()
     vim.cmd("enew!")
     local prompts = {}
 
-    package.loaded["java_scaffold.pom"] = {
+    package.loaded["duke.pom"] = {
       spring_boot_version = function()
         return nil
       end,
@@ -374,12 +374,12 @@ describe("plugin surface", function()
         error("pom insert must not run")
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         error("coordinate validation must not run")
       end,
     }
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       search = function(_, callback)
         callback(nil, {
           { group_id = "org.junit.jupiter", artifact_id = "junit-jupiter", version = "5.13.4" },
@@ -389,7 +389,7 @@ describe("plugin surface", function()
         callback(nil, { "5.13.4" })
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(_, _, callback)
         callback("junit-jupiter")
       end,
@@ -406,7 +406,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").add_dependency()
+    require("duke").add_dependency()
 
     assert.same({ "Maven Central version", "Maven dependency scope" }, prompts)
     assert.same(original, vim.fn.readfile(pom_path))
@@ -441,14 +441,14 @@ describe("plugin surface", function()
     vim.notify = function(message)
       notices[#notices + 1] = message
     end
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       versions = function(group_id, artifact_id, callback)
         assert.equals("org.junit.jupiter", group_id)
         assert.equals("junit-jupiter", artifact_id)
         callback(nil, { "5.13.4", "5.12.0" })
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           assert.equals(1, #items)
@@ -464,7 +464,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
 
     local expected = vim.deepcopy(original)
     expected[6] = "      <version>5.13.4</version>"
@@ -497,23 +497,23 @@ describe("plugin surface", function()
     vim.notify = function(message)
       notices[#notices + 1] = message
     end
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       versions = function(_, _, callback)
         central_calls = central_calls + 1
         callback(nil, { "2.0", "1.0" })
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(_, opts, callback)
         assert.equals("Update Maven dependency", opts.prompt)
         callback(nil)
       end,
     }
 
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
     assert.equals(0, central_calls)
 
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           callback(items[1])
@@ -522,10 +522,10 @@ describe("plugin surface", function()
         end
       end,
     }
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
     assert.equals(1, central_calls)
 
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           callback(items[1])
@@ -534,7 +534,7 @@ describe("plugin surface", function()
         end
       end,
     }
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
 
     assert.equals(2, central_calls)
     assert.same(original, vim.fn.readfile(pom_path))
@@ -567,24 +567,24 @@ describe("plugin surface", function()
     vim.notify = function(message)
       notices[#notices + 1] = message
     end
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       versions = function(_, _, callback)
         callback(nil, { "2.0", "1.0" })
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, _, callback)
         callback(items[1])
       end,
     }
 
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
     assert.is_truthy(table.concat(notices, "\n"):find("demo.version", 1, true))
     assert.same(pom_lines("${demo.version}"), vim.fn.readfile(pom_path))
 
     notices = {}
     vim.fn.writefile(pom_lines("1.0"), pom_path)
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           callback(items[1])
@@ -594,7 +594,7 @@ describe("plugin surface", function()
         end
       end,
     }
-    require("java_scaffold").update_dependency()
+    require("duke").update_dependency()
 
     assert.same(pom_lines("1.1"), vim.fn.readfile(pom_path))
     assert.is_truthy(table.concat(notices, "\n"):find("changed", 1, true))
@@ -628,7 +628,7 @@ describe("plugin surface", function()
     vim.opt.runtimepath:prepend(original_cwd)
     vim.cmd("enew!")
     local confirmation
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_many = function(items, opts, callback)
         assert.equals("Remove Maven dependencies", opts.prompt)
         assert.equals("com.example:first", opts.format_item(items[1]))
@@ -642,7 +642,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").remove_dependency()
+    require("duke").remove_dependency()
 
     assert.is_truthy(confirmation:find("com.example:first", 1, true))
     assert.is_truthy(confirmation:find("com.example:last", 1, true))
@@ -678,7 +678,7 @@ describe("plugin surface", function()
     vim.opt.runtimepath:prepend(original_cwd)
     vim.cmd("enew!")
     local confirm_calls = 0
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_many = function(_, _, callback)
         callback(nil)
       end,
@@ -687,10 +687,10 @@ describe("plugin surface", function()
         return true
       end,
     }
-    require("java_scaffold").remove_dependency()
+    require("duke").remove_dependency()
     assert.equals(0, confirm_calls)
 
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_many = function(items, _, callback)
         callback(items)
       end,
@@ -699,7 +699,7 @@ describe("plugin surface", function()
         return false
       end,
     }
-    require("java_scaffold").remove_dependency()
+    require("duke").remove_dependency()
     assert.equals(1, confirm_calls)
     assert.same(original, vim.fn.readfile(pom_path))
 
@@ -708,7 +708,7 @@ describe("plugin surface", function()
     vim.notify = function(message)
       notices[#notices + 1] = message
     end
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       select_many = function(items, _, callback)
         callback(items)
       end,
@@ -717,7 +717,7 @@ describe("plugin surface", function()
         return true
       end,
     }
-    require("java_scaffold").remove_dependency()
+    require("duke").remove_dependency()
 
     assert.same(stale, vim.fn.readfile(pom_path))
     assert.is_truthy(table.concat(notices, "\n"):find("changed", 1, true))
@@ -733,7 +733,7 @@ describe("plugin surface", function()
     vim.cmd("enew!")
     local received = {}
 
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke.config"] = {
       get = function()
         return {
           spring = {
@@ -743,7 +743,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.pom"] = {
+    package.loaded["duke.pom"] = {
       spring_boot_version = function()
         return "3.5.4"
       end,
@@ -752,7 +752,7 @@ describe("plugin surface", function()
         return lines, #dependencies
       end,
     }
-    package.loaded["java_scaffold.metadata"] = {
+    package.loaded["duke.metadata"] = {
       cache_path = function(kind)
         return kind
       end,
@@ -781,12 +781,12 @@ describe("plugin surface", function()
         }, {}
       end,
     }
-    package.loaded["java_scaffold.maven_central"] = {
+    package.loaded["duke.maven_central"] = {
       search = function()
         error("Maven Central path must not run")
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function()
         error("search prompt must not run")
       end,
@@ -796,7 +796,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").add_dependency()
+    require("duke").add_dependency()
 
     assert.same({
       { group_id = "org.springframework.boot", artifact_id = "spring-boot-starter-web" },
@@ -805,13 +805,13 @@ describe("plugin surface", function()
 
   it("caches public Java runtime discovery", function()
     local discovery_count = 0
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return { java_homes = {} }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return "23"
       end,
@@ -821,7 +821,7 @@ describe("plugin surface", function()
       end,
     }
 
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
     local first = plugin.java_runtimes()
     first.homes["23"] = "/mutated"
     local second = plugin.java_runtimes()
@@ -837,8 +837,8 @@ describe("plugin surface", function()
   it("uses refreshed public Java runtime cache for wizard creation", function()
     local active = "17"
     local created = {}
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -863,7 +863,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return active
       end,
@@ -886,7 +886,7 @@ describe("plugin surface", function()
         callback(active)
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -900,7 +900,7 @@ describe("plugin surface", function()
         created[#created + 1] = opts
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         if prompt == "Destination directory: " then
           callback("/tmp")
@@ -916,7 +916,7 @@ describe("plugin surface", function()
       end,
     }
 
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
     plugin.new_maven()
     active = "23"
     plugin.java_runtimes({ refresh = true })
@@ -928,13 +928,13 @@ describe("plugin surface", function()
 
   it("selects an eligible public Java runtime", function()
     local active = "23"
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return { java_homes = {} }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return active
       end,
@@ -948,7 +948,7 @@ describe("plugin surface", function()
       end,
     }
 
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
 
     assert.same({
       version = "23",
@@ -977,8 +977,8 @@ describe("plugin surface", function()
     local confirm = true
     local runtime_calls = 0
     local creation_calls = 0
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -1003,7 +1003,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         active_calls = active_calls + 1
         return "23"
@@ -1030,7 +1030,7 @@ describe("plugin surface", function()
         callback("23")
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         if prompt == "Destination directory: " then
           callback("/tmp")
@@ -1048,7 +1048,7 @@ describe("plugin surface", function()
         callback(items[1])
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -1064,7 +1064,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").new_maven()
+    require("duke").new_maven()
 
     assert.equals(1, active_calls)
     assert.equals(1, discovery_calls)
@@ -1083,7 +1083,7 @@ describe("plugin surface", function()
     assert.is_truthy(received.review:find("Runner JVM: 23", 1, true))
 
     confirm = false
-    require("java_scaffold").new_maven()
+    require("duke").new_maven()
 
     assert.equals(1, runtime_calls)
     assert.equals(1, creation_calls)
@@ -1091,8 +1091,8 @@ describe("plugin surface", function()
 
   it("rejects blank destination instead of defaulting to cwd", function()
     local creation_calls = 0
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -1117,7 +1117,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return "23"
       end,
@@ -1137,7 +1137,7 @@ describe("plugin surface", function()
         callback("23")
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -1151,7 +1151,7 @@ describe("plugin surface", function()
         creation_calls = creation_calls + 1
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         if prompt == "Destination directory: " then
           callback("")
@@ -1167,15 +1167,15 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").new_maven()
+    require("duke").new_maven()
 
     assert.equals(0, creation_calls)
   end)
 
   it("uses explicit destination and review for Gradle creation", function()
     local received = {}
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -1197,7 +1197,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return "23"
       end,
@@ -1218,7 +1218,7 @@ describe("plugin surface", function()
         callback("23")
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -1229,7 +1229,7 @@ describe("plugin surface", function()
         return nil
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         if prompt == "Destination directory: " then
           callback("/tmp")
@@ -1254,7 +1254,7 @@ describe("plugin surface", function()
         callback(selected[opts.prompt] or items[1])
       end,
     }
-    package.loaded["java_scaffold.gradle"] = {
+    package.loaded["duke.gradle"] = {
       project_type = function(language, project_type)
         return project_type:gsub("^java", language)
       end,
@@ -1263,7 +1263,7 @@ describe("plugin surface", function()
       end,
     }
 
-    require("java_scaffold").new_gradle()
+    require("duke").new_gradle()
 
     assert.equals("/tmp", received.create.cwd)
     assert.equals("com.acme.gradle", received.create.package_name)
@@ -1284,8 +1284,8 @@ describe("plugin surface", function()
     local created = { maven = {}, gradle = {} }
     local package_input = ""
     local active_kind
-    package.loaded["java_scaffold"] = nil
-    package.loaded["java_scaffold.config"] = {
+    package.loaded["duke"] = nil
+    package.loaded["duke.config"] = {
       get = function()
         return {
           group_id = "com.example",
@@ -1321,7 +1321,7 @@ describe("plugin surface", function()
         }
       end,
     }
-    package.loaded["java_scaffold.java"] = {
+    package.loaded["duke.java"] = {
       active = function()
         return "23"
       end,
@@ -1344,7 +1344,7 @@ describe("plugin surface", function()
         callback("23")
       end,
     }
-    package.loaded["java_scaffold.maven"] = {
+    package.loaded["duke.maven"] = {
       validate = function()
         return nil
       end,
@@ -1358,7 +1358,7 @@ describe("plugin surface", function()
         created.maven[#created.maven + 1] = opts
       end,
     }
-    package.loaded["java_scaffold.gradle"] = {
+    package.loaded["duke.gradle"] = {
       project_type = function(language, project_type)
         return project_type:gsub("^java", language)
       end,
@@ -1366,7 +1366,7 @@ describe("plugin surface", function()
         created.gradle[#created.gradle + 1] = opts
       end,
     }
-    package.loaded["java_scaffold.picker"] = {
+    package.loaded["duke.picker"] = {
       input = function(prompt, default, callback)
         if prompt == "Destination directory: " then
           callback("/tmp")
@@ -1388,7 +1388,7 @@ describe("plugin surface", function()
       end,
     }
 
-    local plugin = require("java_scaffold")
+    local plugin = require("duke")
     for _, kind in ipairs({ "maven", "gradle" }) do
       active_kind = kind
       plugin["new_" .. active_kind]()

@@ -67,7 +67,7 @@ local options = vim.deepcopy(defaults)
 local function warn(key, expected)
   vim.schedule(function()
     vim.notify(
-      string.format("java-scaffold.nvim: %s must be %s; using default", key, expected),
+      string.format("duke.nvim: %s must be %s; using default", key, expected),
       vim.log.levels.WARN
     )
   end)

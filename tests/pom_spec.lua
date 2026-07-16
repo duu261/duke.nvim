@@ -2,8 +2,8 @@ describe("POM editing", function()
   local pom
 
   before_each(function()
-    package.loaded["java_scaffold.pom"] = nil
-    pom = require("java_scaffold.pom")
+    package.loaded["duke.pom"] = nil
+    pom = require("duke.pom")
   end)
 
   it("detects Spring Boot parent version", function()

@@ -2,7 +2,7 @@ PLENARY_DIR ?= deps/plenary.nvim
 NVIM ?= nvim
 
 test: $(PLENARY_DIR)
-	NVIM_LOG_FILE=/tmp/java-scaffold-nvim-test.log $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
+	NVIM_LOG_FILE=/tmp/duke-nvim-test.log $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
 		-c "PlenaryBustedDirectory tests/ { minimal_init = 'tests/minimal_init.lua' }"
 
 lint:

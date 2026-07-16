@@ -2,8 +2,8 @@ describe("configured handoff", function()
   local handoff
 
   before_each(function()
-    package.loaded["java_scaffold.handoff"] = nil
-    handoff = require("java_scaffold.handoff")
+    package.loaded["duke.handoff"] = nil
+    handoff = require("duke.handoff")
   end)
 
   it("appends the completed project to configured command", function()
