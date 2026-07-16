@@ -80,6 +80,7 @@ describe("programmatic API", function()
     assert.is_function(duke.create)
     assert.is_function(duke.add)
     assert.is_function(duke.upgrade)
+    assert.is_function(duke.upgrade_parent)
     assert.is_function(duke.outdated)
     assert.is_function(duke.remove)
   end)
@@ -485,6 +486,92 @@ describe("programmatic API", function()
       assert.is_false(result.ok)
     end
     assert.equals(before, table.concat(vim.fn.readfile(path), "\n"))
+  end)
+
+  local function boot_pom(version)
+    return {
+      "<project>",
+      "  <parent>",
+      "    <groupId>org.springframework.boot</groupId>",
+      "    <artifactId>spring-boot-starter-parent</artifactId>",
+      "    <version>" .. version .. "</version>",
+      "  </parent>",
+      "  <artifactId>demo</artifactId>",
+      "</project>",
+    }
+  end
+
+  it("upgrades the Spring Boot parent version and no-ops on the same version", function()
+    local path = pom(boot_pom("3.3.0"))
+    local duke = require("duke")
+
+    local upgraded = wait_result(function(callback)
+      duke.upgrade_parent({ pom_path = path, version = "3.3.5" }, callback)
+    end)
+    assert.same({ ok = true, pom_path = path, changed = true, count = 1, saved = true }, upgraded)
+    assert.same(boot_pom("3.3.5"), vim.fn.readfile(path))
+
+    local same = wait_result(function(callback)
+      duke.upgrade_parent({ pom_path = path, version = "3.3.5" }, callback)
+    end)
+    assert.same({ ok = true, pom_path = path, changed = false, count = 0, saved = true }, same)
+    assert.same(boot_pom("3.3.5"), vim.fn.readfile(path))
+  end)
+
+  it("refuses to upgrade a non-Boot parent without changing bytes", function()
+    local path = pom({
+      "<project>",
+      "  <parent>",
+      "    <groupId>com.example</groupId>",
+      "    <artifactId>company-parent</artifactId>",
+      "    <version>1.0.0</version>",
+      "  </parent>",
+      "</project>",
+    })
+    local before = table.concat(vim.fn.readfile(path), "\n")
+
+    local result = wait_result(function(callback)
+      require("duke").upgrade_parent({ pom_path = path, version = "2.0.0" }, callback)
+    end)
+
+    assert.is_false(result.ok)
+    assert.matches("Spring Boot", result.error)
+    assert.equals(before, table.concat(vim.fn.readfile(path), "\n"))
+  end)
+
+  it("refuses a property-backed parent version without changing bytes", function()
+    local path = pom({
+      "<project>",
+      "  <properties><boot.version>3.3.0</boot.version></properties>",
+      "  <parent>",
+      "    <groupId>org.springframework.boot</groupId>",
+      "    <artifactId>spring-boot-starter-parent</artifactId>",
+      "    <version>${boot.version}</version>",
+      "  </parent>",
+      "</project>",
+    })
+    local before = table.concat(vim.fn.readfile(path), "\n")
+
+    local result = wait_result(function(callback)
+      require("duke").upgrade_parent({ pom_path = path, version = "3.3.5" }, callback)
+    end)
+
+    assert.is_false(result.ok)
+    assert.matches("boot%.version", result.error)
+    assert.equals(before, table.concat(vim.fn.readfile(path), "\n"))
+  end)
+
+  it("rejects invalid upgrade_parent requests before touching the pom", function()
+    local path = pom(boot_pom("3.3.0"))
+    for _, opts in ipairs({
+      { pom_path = path },
+      { pom_path = "/nonexistent/pom.xml", version = "3.3.5" },
+    }) do
+      local result = wait_result(function(callback)
+        require("duke").upgrade_parent(opts, callback)
+      end)
+      assert.is_false(result.ok)
+    end
   end)
 
   it("preserves modified loaded buffers and writes clean loaded buffers", function()

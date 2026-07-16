@@ -406,6 +406,132 @@ local function is_property(value)
   return type(value) == "string" and value:match("^%${[^}]+}$") ~= nil
 end
 
+local function parent_structure(lines)
+  local positions = structure(lines)
+  if not positions.project_close then
+    return nil, "pom.xml has no closing project element"
+  end
+  if positions.project_open == positions.project_close then
+    return nil, "compact one-line project XML is not supported"
+  end
+
+  local raw_xml = table.concat(lines, "\n")
+  local xml = mask_comments(raw_xml)
+  local stack = {}
+  local parent
+  local line_number = 1
+  local previous_position = 1
+
+  for position, closing, qualified_name, attributes, finish in
+    xml:gmatch("()<(%/?)([%w_:.-]+)([^>]*)>()")
+  do
+    local _, newlines = xml:sub(previous_position, position - 1):gsub("\n", "\n")
+    line_number = line_number + newlines
+    previous_position = position
+
+    local name = qualified_name:match("([^:]+)$")
+    if closing == "/" then
+      local node = stack[#stack]
+      if not node or node.name ~= name then
+        return nil, "malformed pom.xml element nesting"
+      end
+      table.remove(stack)
+
+      if node.field then
+        local content = raw_xml:sub(node.content_start, position - 1)
+        if mask_comments(content):find("<", 1, true) then
+          return nil, "nested XML in parent " .. node.field .. " is not supported"
+        end
+        local value = content:match("^%s*(.-)%s*$")
+        if not value or value == "" then
+          return nil, "empty parent " .. node.field .. " is not supported"
+        end
+        if node.target[node.field] ~= nil then
+          return nil, "duplicate parent " .. node.field .. " is not supported"
+        end
+        node.target[node.field] = value
+        if node.field == "version" then
+          local leading = content:match("^(%s*)") or ""
+          local trailing = content:match("(%s*)$") or ""
+          node.target._version_start = node.content_start + #leading
+          node.target._version_end = position - 1 - #trailing
+        end
+      elseif node.kind == "parent" then
+        if node.start_line == line_number then
+          return nil, "compact one-line parent XML is not supported"
+        end
+        node.end_line = line_number
+        node._end_byte = finish - 1
+        node._block = raw_xml:sub(node._start_byte, node._end_byte)
+        parent = node
+      end
+    else
+      local owner = stack[#stack]
+      local self_closing = attributes:match("/%s*$") ~= nil
+      local kind
+      if name == "project" and not owner then
+        kind = "project"
+      elseif name == "parent" and owner and owner.kind == "project" then
+        if self_closing then
+          return nil, "self-closing parent element is not supported"
+        end
+        kind = "parent"
+      end
+
+      if not self_closing then
+        local node = {
+          name = name,
+          kind = kind,
+          start_line = line_number,
+          start_byte = position,
+          content_start = finish,
+        }
+        if kind == "parent" then
+          node._start_byte = position
+        elseif
+          owner
+          and owner.kind == "parent"
+          and (name == "groupId" or name == "artifactId" or name == "version")
+        then
+          node.field = name == "groupId" and "group_id"
+            or (name == "artifactId" and "artifact_id" or "version")
+          node.target = owner
+        end
+        stack[#stack + 1] = node
+      elseif
+        owner
+        and owner.kind == "parent"
+        and (name == "groupId" or name == "artifactId" or name == "version")
+      then
+        return nil, "self-closing parent " .. name .. " is not supported"
+      end
+    end
+  end
+
+  if #stack > 0 then
+    return nil, "pom.xml has unclosed elements"
+  end
+
+  return parent
+end
+
+function M.parent(lines)
+  local node, err = parent_structure(lines)
+  if err then
+    return nil, err
+  end
+  if not node then
+    return nil, "pom.xml has no <parent> element"
+  end
+  if
+    node.group_id ~= "org.springframework.boot"
+    or node.artifact_id ~= "spring-boot-starter-parent"
+  then
+    return nil, "pom.xml parent is not the Spring Boot starter parent"
+  end
+  return node
+end
+
 local function reactor_structure(lines)
   local positions = structure(lines)
   if not positions.project_close then

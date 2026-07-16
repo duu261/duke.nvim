@@ -586,6 +586,128 @@ describe("POM editing", function()
     end)
   end)
 
+  describe("parent version accessor", function()
+    local function boot_pom(version)
+      return {
+        "<project>",
+        "  <parent>",
+        "    <groupId>org.springframework.boot</groupId>",
+        "    <artifactId>spring-boot-starter-parent</artifactId>",
+        "    <version>" .. version .. "</version>",
+        "  </parent>",
+        "  <artifactId>demo</artifactId>",
+        "</project>",
+      }
+    end
+
+    it("returns offsets on a real Boot pom usable by update_version", function()
+      local lines = boot_pom("3.3.0")
+      local parent = assert(pom.parent(lines))
+
+      assert.equals("org.springframework.boot", parent.group_id)
+      assert.equals("spring-boot-starter-parent", parent.artifact_id)
+      assert.equals("3.3.0", parent.version)
+
+      local updated, err = pom.update_version(lines, parent, "3.3.5")
+      assert.is_nil(err)
+      assert.same(boot_pom("3.3.5"), updated)
+    end)
+
+    it("moves only the parent version, leaving a sibling dependency version untouched", function()
+      local lines = {
+        "<project>",
+        "  <parent>",
+        "    <groupId>org.springframework.boot</groupId>",
+        "    <artifactId>spring-boot-starter-parent</artifactId>",
+        "    <version>3.3.0</version>",
+        "  </parent>",
+        "  <artifactId>demo</artifactId>",
+        "  <dependencies>",
+        "    <dependency>",
+        "      <groupId>com.example</groupId>",
+        "      <artifactId>lib</artifactId>",
+        "      <version>3.3.0</version>",
+        "    </dependency>",
+        "  </dependencies>",
+        "</project>",
+      }
+      local parent = assert(pom.parent(lines))
+
+      local updated = pom.update_version(lines, parent, "3.3.5")
+
+      assert.equals("      <version>3.3.0</version>", updated[12])
+      assert.equals("    <version>3.3.5</version>", updated[5])
+    end)
+
+    it("returns nil when there is no parent element", function()
+      local parent, err =
+        pom.parent({ "<project>", "  <artifactId>demo</artifactId>", "</project>" })
+      assert.is_nil(parent)
+      assert.matches("parent", err)
+    end)
+
+    it("refuses a non-Boot parent", function()
+      local parent, err = pom.parent({
+        "<project>",
+        "  <parent>",
+        "    <groupId>com.example</groupId>",
+        "    <artifactId>company-parent</artifactId>",
+        "    <version>1.0.0</version>",
+        "  </parent>",
+        "</project>",
+      })
+      assert.is_nil(parent)
+      assert.matches("Spring Boot", err)
+    end)
+
+    it("rejects a self-closing parent element", function()
+      local parent, err = pom.parent({ "<project>", "  <parent/>", "</project>" })
+      assert.is_nil(parent)
+      assert.matches("self%-closing", err)
+    end)
+
+    it("rejects a compact one-line parent element", function()
+      local parent, err = pom.parent({
+        "<project>",
+        "  <parent><groupId>org.springframework.boot</groupId>"
+          .. "<artifactId>spring-boot-starter-parent</artifactId><version>3.3.0</version></parent>",
+        "</project>",
+      })
+      assert.is_nil(parent)
+      assert.matches("compact", err)
+    end)
+
+    it("refuses a property-backed parent version via update_version", function()
+      local lines = {
+        "<project>",
+        "  <properties><boot.version>3.3.0</boot.version></properties>",
+        "  <parent>",
+        "    <groupId>org.springframework.boot</groupId>",
+        "    <artifactId>spring-boot-starter-parent</artifactId>",
+        "    <version>${boot.version}</version>",
+        "  </parent>",
+        "</project>",
+      }
+      local parent = assert(pom.parent(lines))
+
+      local updated, err = pom.update_version(lines, parent, "3.3.5")
+      assert.matches("property boot%.version", err)
+      assert.same(lines, updated)
+    end)
+
+    it("detects a stale parent block underneath a pending edit", function()
+      local lines = boot_pom("3.3.0")
+      local parent = assert(pom.parent(lines))
+
+      local changed = vim.deepcopy(lines)
+      changed[5] = "    <version>9.9.9</version>"
+
+      local updated, err = pom.update_version(changed, parent, "3.3.5")
+      assert.matches("changed; run command again", err)
+      assert.same(changed, updated)
+    end)
+  end)
+
   describe("module insertion", function()
     it(
       "appends one module to an existing root modules block with surrounding bytes unchanged",

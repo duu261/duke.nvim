@@ -63,6 +63,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     "DukeModule",
     "DukeAdd",
     "DukeUpgrade",
+    "DukeBootUpgrade",
     "DukeOutdated",
     "DukeRemove",
     "DukeClearCache",
@@ -102,6 +103,7 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 | `:DukeModule` | Add a module to the current working directory's Maven reactor |
 | `:DukeAdd` | Add dependencies to nearest `pom.xml` from Spring catalog or Maven Central |
 | `:DukeUpgrade` | Update one explicit root dependency version from Maven Central |
+| `:DukeBootUpgrade` | Upgrade the Spring Boot parent `<version>` from Maven Central |
 | `:DukeOutdated` | Compare literal root dependency versions with Maven Central |
 | `:DukeRemove` | Remove selected root dependencies after confirmation |
 | `:DukeClearCache` | Delete all cached Initializr metadata and dependency catalogs |
@@ -226,6 +228,8 @@ For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `g
 
 `:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list. The current version is marked; selecting it is a no-op. Managed dependencies without a version are hidden with a count notice. Property-backed versions such as `${library.version}` are listed but rejected with the property name because property editing is outside plugin scope. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
 
+`:DukeBootUpgrade` upgrades a Spring Boot `pom.xml`'s `<parent>` `<version>` from Maven Central's full release history for `org.springframework.boot:spring-boot-starter-parent`, so patch bumps on an old line (2.7.x to 2.7.18) stay reachable even after Initializr stops generating that line. A non-Boot parent, or a pom with no `<parent>` at all, is refused. A property-backed parent version, for example `${boot.version}`, is refused with the property name; property editing is outside plugin scope. Picking the version already in the pom is a no-op. An explicit confirmation, defaulted to cancel, shows the current and target version before writing; declining or cancelling the version picker leaves `pom.xml` byte-identical. The pom is re-read after the picker and before the write, so an edit made while the picker was open is caught rather than overwritten. Only the parent `<version>` text changes; no Java version, property, or dependency edit accompanies the bump.
+
 `:DukeOutdated` checks root dependencies with literal explicit versions sequentially against Maven Central and lists `current -> latest` rows. Managed and property-backed versions are skipped with counts. Any lookup error, including a timeout or HTTP 429, stops further lookups but keeps gathered rows and reports how many dependencies were not checked. Selecting a row enters the same single-dependency version picker and stale-file-safe write path as `:DukeUpgrade`; canceling leaves the POM untouched.
 
 `:DukeRemove` lists all root dependencies, including managed ones, and supports multi-select. A mandatory confirmation names every selected coordinate. Declining or canceling changes nothing. Removal deletes complete dependency blocks but keeps the root `<dependencies>` container, sibling blocks, comments, and surrounding blank-line formatting.
@@ -285,9 +289,9 @@ require("duke").add({
 end)
 ```
 
-`create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. `add_module()` adds a module to an existing Maven reactor without UI; unlike the command, `reactor_dir` is required with no current-working-directory fallback. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
+`create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. `upgrade_parent()` upgrades the Spring Boot parent version without UI, skipping the confirmation prompt since the API call itself is the confirmation; it refuses a non-Boot or property-backed parent the same way `:DukeBootUpgrade` does. `add_module()` adds a module to an existing Maven reactor without UI; unlike the command, `reactor_dir` is required with no current-working-directory fallback. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
 
-`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `add_dependency()`, `update_dependency()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
+`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("duke").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 
@@ -314,7 +318,7 @@ Active Java wins when eligible and `prefer_active` is not `false`; otherwise the
 
 ## Scope and limits
 
-V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, plus root-level Maven dependency add, upgrade, outdated inspection, and removal workflows.
+V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, plus root-level Maven dependency add, upgrade, outdated inspection, and removal workflows, and a Spring Boot parent version upgrade.
 
 The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
 

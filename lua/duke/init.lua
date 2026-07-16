@@ -701,6 +701,95 @@ function M.update_dependency()
   end)
 end
 
+function M.upgrade_boot_parent()
+  local pom_path = nearest_pom()
+  if not pom_path then
+    notify_error("no pom.xml found in current directory or parents")
+    return
+  end
+  local lines = read_pom(pom_path)
+  if not lines then
+    notify_error("cannot read " .. pom_path)
+    return
+  end
+  local parent, parent_error = require("duke.pom").parent(lines)
+  if not parent then
+    notify_error(parent_error)
+    return
+  end
+  local property = parent.version and parent.version:match("^%${([%w_.-]+)}$")
+  if property then
+    notify_error("cannot update parent version property " .. property)
+    return
+  end
+
+  require("duke.maven_central").versions(
+    "org.springframework.boot",
+    "spring-boot-starter-parent",
+    function(version_error, versions)
+      if version_error then
+        notify_error(version_error)
+        return
+      end
+      if not versions or #versions == 0 then
+        notify("no Maven Central versions found for spring-boot-starter-parent")
+        return
+      end
+      local choices = vim.deepcopy(versions)
+      if not vim.tbl_contains(choices, parent.version) then
+        choices[#choices + 1] = parent.version
+      end
+      require("duke.picker").select_one(choices, {
+        prompt = "Spring Boot parent version",
+        default = choices[1],
+        format_item = function(version)
+          return version == parent.version and (version .. "  (current)") or version
+        end,
+      }, function(version)
+        if not version then
+          return
+        end
+        if version == parent.version then
+          notify("Spring Boot parent already uses version " .. version)
+          return
+        end
+        if
+          not require("duke.picker").confirm(
+            string.format("Upgrade Spring Boot parent %s -> %s?", parent.version, version),
+            "Upgrade"
+          )
+        then
+          return
+        end
+
+        local latest_lines, buffer, was_modified = read_pom(pom_path)
+        if not latest_lines then
+          notify_error("cannot reread " .. pom_path)
+          return
+        end
+        local latest_parent, latest_error = require("duke.pom").parent(latest_lines)
+        if not latest_parent then
+          notify_error(latest_error)
+          return
+        end
+        if latest_parent.version ~= parent.version then
+          notify_error("pom.xml parent changed; run command again")
+          return
+        end
+        local updated, update_error =
+          require("duke.pom").update_version(latest_lines, latest_parent, version)
+        if update_error then
+          notify_error(update_error)
+          return
+        end
+        local saved = save_pom(pom_path, updated, buffer, was_modified)
+        local suffix = saved and "" or " (buffer left unsaved)"
+        notify("upgraded Spring Boot parent to " .. version .. suffix)
+      end)
+    end
+  )
+end
+
 local function skipped_outdated_notice(managed, property_backed)
   local parts = {}
   if managed > 0 then
@@ -910,6 +999,10 @@ end
 
 function M.upgrade(opts, callback)
   require("duke.api").upgrade(opts, callback)
+end
+
+function M.upgrade_parent(opts, callback)
+  require("duke.api").upgrade_parent(opts, callback)
 end
 
 function M.outdated(opts, callback)

@@ -476,6 +476,54 @@ function M.upgrade(opts, callback)
   end)
 end
 
+local function parent_pom_request(opts)
+  if type(opts) ~= "table" then
+    return nil, "options must be a table"
+  end
+  if not non_empty_string(opts.pom_path) then
+    return nil, "pom_path must be a non-empty string"
+  end
+  local path = absolute(opts.pom_path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= "file" then
+    return nil, "pom_path must identify an existing file"
+  end
+  if not non_empty_string(opts.version) then
+    return nil, "version must be a non-empty string"
+  end
+  return path
+end
+
+function M.upgrade_parent(opts, callback)
+  run_sync(callback, function(complete)
+    local path, validation_error = parent_pom_request(opts)
+    if not path then
+      fail(complete, nil, validation_error)
+      return
+    end
+    local lines, buffer, was_modified, read_error = read_pom(path)
+    if not lines then
+      fail(complete, { pom_path = path }, read_error)
+      return
+    end
+    local parent, parent_error = require("duke.pom").parent(lines)
+    if not parent then
+      fail(complete, { pom_path = path }, parent_error)
+      return
+    end
+    if parent.version == opts.version then
+      complete(mutation_result(path, false, 0, true))
+      return
+    end
+    local updated, update_error = require("duke.pom").update_version(lines, parent, opts.version)
+    if update_error then
+      fail(complete, { pom_path = path }, update_error)
+      return
+    end
+    save_mutation(complete, path, updated, buffer, was_modified, 1)
+  end)
+end
+
 function M.remove(opts, callback)
   run_sync(callback, function(complete)
     local path, validation_error = pom_request(opts, false)

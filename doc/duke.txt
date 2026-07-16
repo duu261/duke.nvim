@@ -203,11 +203,19 @@ upgrade({opts}, {callback})               *duke.upgrade()*
     version. Managed, missing-version, property-backed, malformed, and
     ambiguous duplicate dependencies are rejected.
 
+upgrade_parent({opts}, {callback})   *duke.upgrade_parent()*
+    Upgrade the Spring Boot parent version. opts requires pom_path and
+    version, where version is the new explicit parent version. A non-Boot
+    parent, a missing parent, and a property-backed parent version are
+    rejected. Skips the confirmation prompt shown by :DukeBootUpgrade; the
+    API call itself is the confirmation.
+
 remove({opts}, {callback})                 *duke.remove()*
     Remove one unique root Maven dependency. opts requires pom_path, group_id,
     and artifact_id. A missing coordinate succeeds without a change.
 
-    Successful add(), upgrade(), and remove() results have this shape:
+    Successful add(), upgrade(), upgrade_parent(), and remove() results have
+    this shape:
 >
       {
         ok = true,
@@ -248,7 +256,7 @@ outdated({opts}, {callback})             *duke.outdated()*
     Failure before the first completed lookup returns ok = false. Ambiguous
     duplicate coordinates are rejected before lookup.
 
-    All five programmatic functions require a callback. Unknown option keys
+    All six programmatic functions require a callback. Unknown option keys
     are ignored. Wrong types, missing required fields, unsupported enum
     values, and unknown project kinds return structured callback errors. Every
     result callback runs once on the Neovim main loop.
@@ -279,6 +287,10 @@ add_dependency()                     *duke.add_dependency()*
 update_dependency()               *duke.update_dependency()*
     Find the nearest pom.xml and update one explicit root dependency version
     through the same workflow as :DukeUpgrade.
+
+upgrade_boot_parent()           *duke.upgrade_boot_parent()*
+    Find the nearest pom.xml and upgrade the Spring Boot parent version
+    through the same workflow as :DukeBootUpgrade.
 
 outdated_dependencies()       *duke.outdated_dependencies()*
     Find the nearest pom.xml and compare literal explicit root dependency
@@ -400,6 +412,17 @@ then choose [Done].
     newest-first order. The current version is marked and selecting it is a
     no-op. Property-backed versions are rejected with the property name. Only
     version text changes; scope and all other block content stay untouched.
+
+                                       *:DukeBootUpgrade*
+:DukeBootUpgrade
+    Find the nearest pom.xml, resolve its <parent>, and refuse if it is not
+    org.springframework.boot:spring-boot-starter-parent, if there is no
+    <parent> at all, or if the version is property-backed. Otherwise list
+    Maven Central's full release history for spring-boot-starter-parent in
+    newest-first order; the current version is marked and selecting it is a
+    no-op. An explicit confirmation, defaulted to cancel, shows current and
+    target version before writing. The pom is re-read after the picker and
+    before the write. Only the parent <version> text changes.
 
                                           *:DukeOutdated*
 :DukeOutdated

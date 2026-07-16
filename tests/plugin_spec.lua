@@ -52,6 +52,7 @@ describe("plugin surface", function()
     assert.equals(2, vim.fn.exists(":DukeSpring"))
     assert.equals(2, vim.fn.exists(":DukeAdd"))
     assert.equals(2, vim.fn.exists(":DukeUpgrade"))
+    assert.equals(2, vim.fn.exists(":DukeBootUpgrade"))
     assert.equals(2, vim.fn.exists(":DukeRemove"))
     assert.equals(2, vim.fn.exists(":DukeOutdated"))
     assert.equals(2, vim.fn.exists(":DukeModule"))
@@ -69,6 +70,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.new_module)
     assert.is_function(plugin.add_dependency)
     assert.is_function(plugin.update_dependency)
+    assert.is_function(plugin.upgrade_boot_parent)
     assert.is_function(plugin.remove_dependency)
     assert.is_function(plugin.outdated_dependencies)
     assert.is_function(plugin.clear_cache)
@@ -78,6 +80,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.add)
     assert.is_function(plugin.add_module)
     assert.is_function(plugin.upgrade)
+    assert.is_function(plugin.upgrade_parent)
     assert.is_function(plugin.outdated)
     assert.is_function(plugin.remove)
   end)
@@ -1949,5 +1952,193 @@ describe("plugin surface", function()
 
     assert.is_truthy(table.concat(notices, "\n"):find("reactor packaging must be pom", 1, true))
     assert.is_true(#logged >= 1)
+  end)
+
+  local function boot_pom(version)
+    return {
+      "<project>",
+      "  <parent>",
+      "    <groupId>org.springframework.boot</groupId>",
+      "    <artifactId>spring-boot-starter-parent</artifactId>",
+      "    <version>" .. version .. "</version>",
+      "  </parent>",
+      "  <artifactId>demo</artifactId>",
+      "</project>",
+    }
+  end
+
+  it("lists Boot versions, confirms, and writes exactly the parent version", function()
+    local original = boot_pom("3.3.0")
+    local pom_path = open_pom(original)
+    local lookups = {}
+    local confirmed
+    package.loaded["duke.maven_central"] = {
+      versions = function(group_id, artifact_id, callback)
+        lookups[#lookups + 1] = group_id .. ":" .. artifact_id
+        callback(nil, { "3.3.5", "3.3.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      select_one = function(items, opts, callback)
+        assert.equals("Spring Boot parent version", opts.prompt)
+        assert.same({ "3.3.5", "3.3.0" }, items)
+        assert.equals("3.3.5", opts.default)
+        assert.equals("3.3.0  (current)", opts.format_item("3.3.0"))
+        callback("3.3.5")
+      end,
+      confirm = function(message)
+        confirmed = message
+        return true
+      end,
+    }
+
+    require("duke").upgrade_boot_parent()
+
+    assert.same({ "org.springframework.boot:spring-boot-starter-parent" }, lookups)
+    assert.matches("3%.3%.0", confirmed)
+    assert.matches("3%.3%.5", confirmed)
+    assert.same(boot_pom("3.3.5"), vim.fn.readfile(pom_path))
+  end)
+
+  it("writes nothing when the Boot parent confirmation is declined", function()
+    local original = boot_pom("3.3.0")
+    local pom_path = open_pom(original)
+    package.loaded["duke.maven_central"] = {
+      versions = function(_, _, callback)
+        callback(nil, { "3.3.5", "3.3.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      select_one = function(_, _, callback)
+        callback("3.3.5")
+      end,
+      confirm = function()
+        return false
+      end,
+    }
+
+    require("duke").upgrade_boot_parent()
+
+    assert.same(original, vim.fn.readfile(pom_path))
+  end)
+
+  it("writes nothing when the Boot version picker is cancelled", function()
+    local original = boot_pom("3.3.0")
+    local pom_path = open_pom(original)
+    local confirm_calls = 0
+    package.loaded["duke.maven_central"] = {
+      versions = function(_, _, callback)
+        callback(nil, { "3.3.5", "3.3.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      select_one = function(_, _, callback)
+        callback(nil)
+      end,
+      confirm = function()
+        confirm_calls = confirm_calls + 1
+        return true
+      end,
+    }
+
+    require("duke").upgrade_boot_parent()
+
+    assert.equals(0, confirm_calls)
+    assert.same(original, vim.fn.readfile(pom_path))
+  end)
+
+  it("re-reads the pom after the version picker before writing the Boot parent", function()
+    local original = boot_pom("3.3.0")
+    local pom_path = open_pom(original)
+    package.loaded["duke.maven_central"] = {
+      versions = function(_, _, callback)
+        callback(nil, { "3.3.5", "3.3.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      select_one = function(_, _, callback)
+        vim.fn.writefile(boot_pom("3.4.0"), pom_path)
+        callback("3.3.5")
+      end,
+      confirm = function()
+        return true
+      end,
+    }
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+
+    require("duke").upgrade_boot_parent()
+
+    assert.same(boot_pom("3.4.0"), vim.fn.readfile(pom_path))
+    assert.is_truthy(table.concat(notices, "\n"):find("changed; run command again", 1, true))
+  end)
+
+  it("refuses a non-Boot or property-backed parent without a version lookup", function()
+    local central_calls = 0
+    package.loaded["duke.maven_central"] = {
+      versions = function()
+        central_calls = central_calls + 1
+      end,
+    }
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+
+    local plain_pom = open_pom({
+      "<project>",
+      "  <parent>",
+      "    <groupId>com.example</groupId>",
+      "    <artifactId>company-parent</artifactId>",
+      "    <version>1.0.0</version>",
+      "  </parent>",
+      "</project>",
+    })
+    require("duke").upgrade_boot_parent()
+    assert.same({
+      "<project>",
+      "  <parent>",
+      "    <groupId>com.example</groupId>",
+      "    <artifactId>company-parent</artifactId>",
+      "    <version>1.0.0</version>",
+      "  </parent>",
+      "</project>",
+    }, vim.fn.readfile(plain_pom))
+
+    assert.equals(0, central_calls)
+    assert.is_truthy(table.concat(notices, "\n"):find("Spring Boot", 1, true))
+  end)
+
+  it("refuses a property-backed parent version without a version lookup", function()
+    local central_calls = 0
+    package.loaded["duke.maven_central"] = {
+      versions = function()
+        central_calls = central_calls + 1
+      end,
+    }
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+
+    local property_pom = open_pom({
+      "<project>",
+      "  <properties><boot.version>3.3.0</boot.version></properties>",
+      "  <parent>",
+      "    <groupId>org.springframework.boot</groupId>",
+      "    <artifactId>spring-boot-starter-parent</artifactId>",
+      "    <version>${boot.version}</version>",
+      "  </parent>",
+      "</project>",
+    })
+    local before = vim.fn.readfile(property_pom)
+
+    require("duke").upgrade_boot_parent()
+
+    assert.same(before, vim.fn.readfile(property_pom))
+    assert.equals(0, central_calls)
+    assert.is_truthy(table.concat(notices, "\n"):find("boot.version", 1, true))
   end)
 end)

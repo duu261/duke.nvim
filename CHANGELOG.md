@@ -7,6 +7,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 ### Added
 
 - Initializr cache fallback now surfaces to the user: one concise notification names whether the host was unreachable or the remote schema was not recognized, plus the cached data's age. The full error still goes to `:DukeLog`.
+- `:DukeBootUpgrade` command and `duke.upgrade_parent(opts, callback)` API verb to upgrade a Spring Boot pom's `<parent>` version from Maven Central. Refuses a non-Boot parent, a missing parent, and a property-backed version. Interactive flow shows an explicit current-to-target confirmation defaulted to cancel and re-reads the pom after the version picker and before writing.
 
 ## 0.6.0 - 2026-07-16
 

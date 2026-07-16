@@ -31,6 +31,10 @@ vim.api.nvim_create_user_command("DukeUpgrade", function()
   require("duke").update_dependency()
 end, { desc = "Update a root pom.xml dependency from Maven Central", force = true })
 
+vim.api.nvim_create_user_command("DukeBootUpgrade", function()
+  require("duke").upgrade_boot_parent()
+end, { desc = "Upgrade the Spring Boot parent version from Maven Central", force = true })
+
 vim.api.nvim_create_user_command("DukeOutdated", function()
   require("duke").outdated_dependencies()
 end, { desc = "List outdated root pom.xml dependencies", force = true })
