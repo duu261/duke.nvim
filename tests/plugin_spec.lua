@@ -285,6 +285,96 @@ describe("plugin surface", function()
     assert.is_truthy(received.review:find("Dependencies: none", 1, true))
   end)
 
+  it("notifies once when the Spring metadata step resolves from cache", function()
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+    package.loaded["duke.metadata"] = {
+      cache_path = function()
+        return "path"
+      end,
+      format_age = function()
+        return "3 days ago"
+      end,
+      is_client = function()
+        return true
+      end,
+      fetch_cached = function(_, _, _, callback)
+        callback(nil, { source = "cache" }, "cache", { reason = "fetch", age_seconds = 259200 })
+      end,
+    }
+
+    local wizard = require("duke.wizard")
+    local step = wizard.spring_metadata_fetch({ spring = { metadata_url = "https://x" } })
+    local advanced
+    step({}, function(state)
+      advanced = state
+    end)
+
+    assert.is_not_nil(advanced)
+    assert.equals(2, #notices)
+    assert.is_truthy(notices[2]:find("unreachable", 1, true))
+    assert.is_truthy(notices[2]:find("3 days ago", 1, true))
+  end)
+
+  it("does not notify about cache when the Spring metadata step resolves from remote", function()
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+    package.loaded["duke.metadata"] = {
+      cache_path = function()
+        return "path"
+      end,
+      is_client = function()
+        return true
+      end,
+      fetch_cached = function(_, _, _, callback)
+        callback(nil, { source = "remote" }, "remote")
+      end,
+    }
+
+    local wizard = require("duke.wizard")
+    local step = wizard.spring_metadata_fetch({ spring = { metadata_url = "https://x" } })
+    local advanced
+    step({}, function(state)
+      advanced = state
+    end)
+
+    assert.is_not_nil(advanced)
+    assert.equals(1, #notices)
+    assert.is_truthy(notices[1]:find("loading Spring Initializr metadata", 1, true))
+  end)
+
+  it("uses schema wording when the Spring metadata step resolves from cache after drift", function()
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
+    package.loaded["duke.metadata"] = {
+      cache_path = function()
+        return "path"
+      end,
+      format_age = function()
+        return "just now"
+      end,
+      is_client = function()
+        return true
+      end,
+      fetch_cached = function(_, _, _, callback)
+        callback(nil, { source = "cache" }, "cache", { reason = "schema", age_seconds = 0 })
+      end,
+    }
+
+    local wizard = require("duke.wizard")
+    local step = wizard.spring_metadata_fetch({ spring = { metadata_url = "https://x" } })
+    step({}, function() end)
+
+    assert.equals(2, #notices)
+    assert.is_truthy(notices[2]:find("schema not recognized", 1, true))
+  end)
+
   it("uses Maven Central for plain Maven poms and rereads before insertion", function()
     local cwd = vim.fn.tempname()
     vim.fn.mkdir(cwd, "p")

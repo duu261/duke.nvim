@@ -10,6 +10,14 @@ local function notify(message, level)
   vim.notify("duke.nvim: " .. message, level or vim.log.levels.INFO)
 end
 
+local function cache_fallback_message(fallback)
+  local age = require("duke.metadata").format_age(fallback.age_seconds)
+  if fallback.reason == "schema" then
+    return "Initializr metadata schema not recognized; using cached data from " .. age
+  end
+  return "Spring Initializr unreachable; using cached data from " .. age
+end
+
 local function finish_project(project_dir)
   local config = require("duke.config").get()
   local entry_file = require("duke.project").entry(project_dir)
@@ -473,15 +481,21 @@ function M.add_dependency()
   end
 
   notify("loading dependencies for Spring Boot " .. boot_version)
-  fetch_client(function(client_error, client)
+  fetch_client(function(client_error, client, client_source, client_fallback)
     if client_error then
       notify_error(client_error)
       return
     end
-    fetch_catalog(boot_version, function(catalog_error, catalog)
+    if client_source == "cache" and client_fallback then
+      notify(cache_fallback_message(client_fallback))
+    end
+    fetch_catalog(boot_version, function(catalog_error, catalog, catalog_source, catalog_fallback)
       if catalog_error then
         notify_error(catalog_error)
         return
+      end
+      if catalog_source == "cache" and catalog_fallback then
+        notify(cache_fallback_message(catalog_fallback))
       end
       local picker_lines = read_pom(pom_path)
       if not picker_lines then

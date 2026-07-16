@@ -53,6 +53,33 @@ local function response_error(raw)
   return nil
 end
 
+local function age_seconds(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or not stat.mtime or not stat.mtime.sec then
+    return 0
+  end
+  local delta = os.time() - stat.mtime.sec
+  return delta > 0 and delta or 0
+end
+
+local function plural(count, unit)
+  return count .. " " .. unit .. (count == 1 and "" or "s") .. " ago"
+end
+
+function M.format_age(seconds)
+  seconds = seconds or 0
+  if seconds < 60 then
+    return "just now"
+  end
+  if seconds < 3600 then
+    return plural(math.floor(seconds / 60), "minute")
+  end
+  if seconds < 86400 then
+    return plural(math.floor(seconds / 3600), "hour")
+  end
+  return plural(math.floor(seconds / 86400), "day")
+end
+
 local function write_cache(path, raw)
   local parent = vim.fs.dirname(path)
   if vim.fn.mkdir(parent, "p") == 0 and vim.fn.isdirectory(parent) ~= 1 then
@@ -111,6 +138,7 @@ end
 function M.fetch_cached(url, cache_path, runner, callback, validator)
   runner = runner or M.http_get
   runner(url, function(fetch_error, raw)
+    local reason = "fetch"
     if not fetch_error and raw then
       local remote, decode_error = decode(raw)
       if remote and valid(remote, validator) then
@@ -119,12 +147,17 @@ function M.fetch_cached(url, cache_path, runner, callback, validator)
         return
       end
       fetch_error = decode_error or "Initializr JSON has unexpected structure"
+      reason = "schema"
     end
 
     local cached, cache_error = read_cache(cache_path, validator)
     if cached then
       require("duke.log").add("WARN", "using cached Initializr metadata")
-      callback(nil, cached, "cache")
+      callback(nil, cached, "cache", {
+        reason = reason,
+        detail = fetch_error,
+        age_seconds = age_seconds(cache_path),
+      })
       return
     end
     callback(fetch_error or cache_error or "Initializr metadata unavailable")

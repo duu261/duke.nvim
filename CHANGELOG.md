@@ -4,6 +4,10 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- Initializr cache fallback now surfaces to the user: one concise notification names whether the host was unreachable or the remote schema was not recognized, plus the cached data's age. The full error still goes to `:DukeLog`.
+
 ## 0.6.0 - 2026-07-16
 
 ### Added

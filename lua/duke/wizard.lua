@@ -16,6 +16,14 @@ local function notify(message, level)
   vim.notify("duke.nvim: " .. message, level or vim.log.levels.INFO)
 end
 
+local function cache_fallback_message(fallback)
+  local age = require("duke.metadata").format_age(fallback.age_seconds)
+  if fallback.reason == "schema" then
+    return "Initializr metadata schema not recognized; using cached data from " .. age
+  end
+  return "Spring Initializr unreachable; using cached data from " .. age
+end
+
 -- Engine: runs steps sequentially. Each step is fn(state, callback).
 -- callback(nil) aborts the sequence. callback(new_state) advances to next step.
 -- on_complete(final_state) called after the last step succeeds.
@@ -328,11 +336,14 @@ function M.spring_metadata_fetch(config)
       config.spring.metadata_url,
       metadata.cache_path("metadata", nil, config.spring.metadata_url),
       nil,
-      function(fetch_error, client)
+      function(fetch_error, client, source, fallback)
         if fetch_error then
           notify_error(fetch_error)
           callback(nil)
           return
+        end
+        if source == "cache" and fallback then
+          notify(cache_fallback_message(fallback))
         end
         state.spring_client = client
         callback(state)
@@ -600,11 +611,14 @@ function M.spring_steps(config)
         url,
         metadata.cache_path("dependencies", state.boot_version, config.spring.dependencies_url),
         nil,
-        function(catalog_error, catalog)
+        function(catalog_error, catalog, source, fallback)
           if catalog_error then
             notify_error(catalog_error)
             callback(nil)
             return
+          end
+          if source == "cache" and fallback then
+            notify(cache_fallback_message(fallback))
           end
           state.spring_catalog = catalog
           callback(state)

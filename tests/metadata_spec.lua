@@ -150,6 +150,100 @@ describe("Initializr metadata", function()
     assert.equals("=https", received_args[4])
   end)
 
+  it("reports fetch-failure reason and cache age when falling back after a fetch error", function()
+    local cache = vim.fn.tempname()
+    vim.fn.writefile({ '{"source":"cache"}' }, cache)
+    vim.uv.fs_utime(cache, os.time() - 200, os.time() - 200)
+    local result
+
+    metadata.fetch_cached("https://example.test/metadata", cache, function(_, callback)
+      callback("offline")
+    end, function(err, value, source, fallback)
+      assert.is_nil(err)
+      result = { value = value, source = source, fallback = fallback }
+    end)
+
+    assert(vim.wait(1000, function()
+      return result ~= nil
+    end))
+    assert.equals("cache", result.source)
+    assert.equals("fetch", result.fallback.reason)
+    assert.equals("offline", result.fallback.detail)
+    assert.is_true(result.fallback.age_seconds >= 200)
+    vim.fn.delete(cache)
+  end)
+
+  it("reports schema reason when falling back after validator rejection", function()
+    local cache = vim.fn.tempname()
+    vim.fn.writefile({ '{"source":"cache"}' }, cache)
+    local result
+
+    metadata.fetch_cached("https://example.test/metadata", cache, function(_, callback)
+      callback(nil, "not json")
+    end, function(err, value, source, fallback)
+      assert.is_nil(err)
+      result = { value = value, source = source, fallback = fallback }
+    end, function()
+      return true
+    end)
+
+    assert(vim.wait(1000, function()
+      return result ~= nil
+    end))
+    assert.equals("cache", result.source)
+    assert.equals("schema", result.fallback.reason)
+    vim.fn.delete(cache)
+  end)
+
+  it("reports no fallback table when resolved from remote", function()
+    local cache = vim.fn.tempname()
+    local result
+
+    metadata.fetch_cached("https://example.test/metadata", cache, function(_, callback)
+      callback(nil, '{"source":"remote"}')
+    end, function(err, _value, source, fallback)
+      assert.is_nil(err)
+      result = { source = source, fallback = fallback }
+    end)
+
+    assert(vim.wait(1000, function()
+      return result ~= nil
+    end))
+    assert.equals("remote", result.source)
+    assert.is_nil(result.fallback)
+    vim.fn.delete(cache)
+  end)
+
+  it("still calls back with the fetch error when there is no cache", function()
+    local cache = vim.fn.tempname()
+    local received_error
+
+    metadata.fetch_cached("https://example.test/metadata", cache, function(_, callback)
+      callback("offline")
+    end, function(err, value, source)
+      received_error = err
+      assert.is_nil(value)
+      assert.is_nil(source)
+    end)
+
+    assert(vim.wait(1000, function()
+      return received_error ~= nil
+    end))
+    assert.equals("offline", received_error)
+  end)
+
+  it("formats cache age boundaries", function()
+    assert.equals("just now", metadata.format_age(0))
+    assert.equals("just now", metadata.format_age(-5))
+    assert.equals("just now", metadata.format_age(59))
+    assert.equals("1 minute ago", metadata.format_age(60))
+    assert.equals("2 minutes ago", metadata.format_age(120))
+    assert.equals("1 hour ago", metadata.format_age(3600))
+    assert.equals("2 hours ago", metadata.format_age(7200))
+    assert.equals("1 day ago", metadata.format_age(86400))
+    assert.equals("3 days ago", metadata.format_age(3 * 86400))
+  end)
+
   it("rejects invalid remote structure without replacing valid cache", function()
     local cache = vim.fn.tempname()
     local cached_json = vim.json.encode({

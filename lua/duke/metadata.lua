@@ -12,6 +12,7 @@ return {
   cache_dir = cache.cache_dir,
   cache_path = cache.cache_path,
   clear_cache = cache.clear_cache,
+  format_age = cache.format_age,
 
   -- Model
   is_client = model.is_client,

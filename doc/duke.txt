@@ -466,6 +466,12 @@ archives still require network access.
 Use :DukeClearCache when cached Initializr data becomes stale. The
 next metadata request fetches fresh data.
 
+Falling back to cache is never silent: one notification names why
+(host unreachable, or the remote payload's schema was not recognized)
+and how old the cached data is. The underlying error stays in
+:DukeLog. The cache has no expiry and stale data is never refused;
+the notification only informs the decision to keep going or clear it.
+
 Initializr may stop serving dependency catalogs for old Spring Boot
 versions. Insertion then requires a catalog for that version cached earlier
 from the same configured Initializr URL. Without that cache, the Initializr
