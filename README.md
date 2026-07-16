@@ -7,6 +7,7 @@ Create Maven, Gradle, and Spring Boot projects safely from Neovim, then open gen
 - Maven quickstart projects with optional Maven Wrapper generation.
 - Wrapper-backed Gradle applications, libraries, and Gradle plugins.
 - Spring Boot Maven projects using live Spring Initializr choices.
+- Unified project generator picker plus direct workflow commands.
 - Safe Spring dependency insertion into an existing `pom.xml`.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits, and offline metadata fallback.
@@ -37,10 +38,12 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
   version = "*",
   main = "java_scaffold",
   cmd = {
+    "JavaScaffoldNew",
     "JavaScaffoldMaven",
     "JavaScaffoldGradle",
     "JavaScaffoldSpring",
     "JavaScaffoldAddDependency",
+    "JavaScaffoldClearCache",
     "JavaScaffoldLog",
     "JavaScaffoldHealth",
   },
@@ -55,14 +58,14 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 1. Install plugin and restart Neovim.
 2. Run `:JavaScaffoldHealth` to load a lazy installation and check available tools.
 3. Change Neovim's working directory to the parent directory that should receive the project.
-4. Run `:JavaScaffoldMaven`, `:JavaScaffoldGradle`, or `:JavaScaffoldSpring`.
-5. Choose coordinates, project type when applicable, Java target, and Spring dependencies.
+4. Run `:JavaScaffoldNew`, then choose Maven, Gradle, or Spring Boot. Direct workflow commands remain available.
+5. Choose coordinates, project options, Java target, and Spring dependencies when applicable.
 
 Example:
 
 ```vim
 :cd ~/Projects
-:JavaScaffoldMaven
+:JavaScaffoldNew
 ```
 
 If artifact ID is `demo`, completed project becomes `~/Projects/demo`. Existing targets are never overwritten.
@@ -71,10 +74,12 @@ If artifact ID is `demo`, completed project becomes `~/Projects/demo`. Existing 
 
 | Command | Action |
 | --- | --- |
+| `:JavaScaffoldNew` | Choose Maven, Gradle, or Spring Boot, then run its wizard |
 | `:JavaScaffoldMaven` | Create Maven quickstart project |
 | `:JavaScaffoldGradle` | Create Gradle application, library, or plugin |
 | `:JavaScaffoldSpring` | Create Spring Boot Maven project |
 | `:JavaScaffoldAddDependency` | Add supported Spring dependencies to nearest `pom.xml` |
+| `:JavaScaffoldClearCache` | Delete all cached Initializr metadata and dependency catalogs |
 | `:JavaScaffoldLog` | Show internal operation log |
 | `:JavaScaffoldHealth` | Load lazy plugin and run its health check |
 
@@ -169,6 +174,8 @@ Initializr metadata, catalog, and project URLs must use HTTPS. Curl is restricte
 
 Successful metadata and Boot-version catalogs are cached below `stdpath("cache")/java-scaffold.nvim`, separately for each configured Initializr URL. Fetch failures use a valid same-URL cache. Spring project creation still needs network access.
 
+Run `:JavaScaffoldClearCache` when cached Initializr data becomes stale. Next metadata request fetches fresh data.
+
 Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration.
 
 No Boot versions are hardcoded into the picker. Old-version lookup happens only when the dependency command reads an existing `pom.xml`.
@@ -192,6 +199,8 @@ handoff = {
 `{project}` and `{file}` placeholders expand before launch. Without placeholders, project path is appended. Handoff stays disabled by default. Failure falls back to opening project inside current Neovim.
 
 ## Lua API
+
+`require("java_scaffold").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("java_scaffold").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 

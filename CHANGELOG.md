@@ -4,6 +4,12 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- Unified project generator picker through `:JavaScaffoldNew`.
+- Spring language and packaging pickers backed by Initializr metadata.
+- Initializr metadata cache removal through `:JavaScaffoldClearCache`.
+
 ### Fixed
 
 - Reject symlink and hardlink members before Spring archive extraction.

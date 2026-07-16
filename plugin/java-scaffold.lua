@@ -3,6 +3,10 @@ if vim.g.loaded_java_scaffold then
 end
 vim.g.loaded_java_scaffold = true
 
+vim.api.nvim_create_user_command("JavaScaffoldNew", function()
+  require("java_scaffold").new()
+end, { desc = "Choose and create a Java project", force = true })
+
 vim.api.nvim_create_user_command("JavaScaffoldMaven", function()
   require("java_scaffold").new_maven()
 end, { desc = "Create a Maven Java project", force = true })
@@ -18,6 +22,10 @@ end, { desc = "Create a Spring Boot project", force = true })
 vim.api.nvim_create_user_command("JavaScaffoldAddDependency", function()
   require("java_scaffold").add_dependency()
 end, { desc = "Add Spring dependencies to pom.xml", force = true })
+
+vim.api.nvim_create_user_command("JavaScaffoldClearCache", function()
+  require("java_scaffold").clear_cache()
+end, { desc = "Clear cached Spring Initializr metadata", force = true })
 
 vim.api.nvim_create_user_command("JavaScaffoldLog", function()
   require("java_scaffold.log").show()

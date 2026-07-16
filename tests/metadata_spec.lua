@@ -150,6 +150,8 @@ describe("Initializr metadata", function()
     local valid_client = {
       bootVersion = { default = "4.0.0", values = { { id = "4.0.0" } } },
       javaVersion = { default = "17", values = { { id = "17" } } },
+      language = { default = "java", values = { { id = "java" } } },
+      packaging = { default = "jar", values = { { id = "jar" }, { id = "war" } } },
       dependencies = {
         values = {
           {
@@ -172,6 +174,10 @@ describe("Initializr metadata", function()
     local malformed_version = vim.deepcopy(valid_client)
     malformed_version.bootVersion.values[1].id = 4
     assert.is_false(metadata.is_client(malformed_version))
+
+    local malformed_language = vim.deepcopy(valid_client)
+    malformed_language.language.values[1].id = 4
+    assert.is_false(metadata.is_client(malformed_language))
   end)
 
   it("rejects deeply malformed dependency catalogs", function()
@@ -201,6 +207,24 @@ describe("Initializr metadata", function()
     assert.not_equals(standard, custom)
     assert.is_truthy(standard:find(vim.fn.sha256("https://start.spring.io"), 1, true))
     assert.is_truthy(custom:find(vim.fn.sha256("https://initializr.example.test"), 1, true))
+  end)
+
+  it("clears the complete Initializr cache directory", function()
+    local cache = vim.fn.tempname()
+    local nested = vim.fs.joinpath(cache, "server")
+    vim.fn.mkdir(nested, "p")
+    vim.fn.writefile({ "cached" }, vim.fs.joinpath(nested, "metadata.json"))
+    local original_cache_dir = metadata.cache_dir
+    metadata.cache_dir = function()
+      return cache
+    end
+
+    local ok, err = metadata.clear_cache()
+    metadata.cache_dir = original_cache_dir
+
+    assert.is_true(ok)
+    assert.is_nil(err)
+    assert.equals(0, vim.fn.isdirectory(cache))
   end)
 
   it("resolves selected dependency IDs through the version catalog", function()

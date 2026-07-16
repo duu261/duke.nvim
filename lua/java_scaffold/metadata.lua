@@ -176,6 +176,8 @@ function M.is_client(value)
   return type(value) == "table"
     and section(value.bootVersion)
     and section(value.javaVersion)
+    and section(value.language)
+    and section(value.packaging)
     and type(value.dependencies) == "table"
     and list_matches(value.dependencies.values, group)
 end
@@ -206,17 +208,28 @@ function M.is_catalog(value)
   return true
 end
 
+function M.cache_dir()
+  return vim.fs.joinpath(vim.fn.stdpath("cache"), "java-scaffold.nvim")
+end
+
 function M.cache_path(kind, version, url)
   local filename = kind
   if version then
     filename = filename .. "-" .. version:gsub("[^%w_.-]", "_")
   end
-  return vim.fs.joinpath(
-    vim.fn.stdpath("cache"),
-    "java-scaffold.nvim",
-    vim.fn.sha256(url),
-    filename .. ".json"
-  )
+  return vim.fs.joinpath(M.cache_dir(), vim.fn.sha256(url), filename .. ".json")
+end
+
+function M.clear_cache()
+  local path = M.cache_dir()
+  if not vim.uv.fs_stat(path) then
+    return true
+  end
+  local ok, result = pcall(vim.fn.delete, path, "rf")
+  if not ok or result ~= 0 then
+    return nil, "cannot clear Initializr cache: " .. path
+  end
+  return true
 end
 
 function M.flatten_dependencies(client)

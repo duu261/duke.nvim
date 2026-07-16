@@ -149,6 +149,25 @@ local function java_choices(config)
   return java, runtimes, versions
 end
 
+function M.new()
+  local workflows = {
+    { id = "maven", name = "Maven quickstart" },
+    { id = "gradle", name = "Gradle Java" },
+    { id = "spring", name = "Spring Boot" },
+  }
+  require("java_scaffold.picker").select_one(workflows, {
+    prompt = "Project generator",
+    default = "maven",
+    format_item = function(item)
+      return item.name
+    end,
+  }, function(selected)
+    if selected then
+      M["new_" .. selected.id]()
+    end
+  end)
+end
+
 function M.new_maven()
   local config = require("java_scaffold.config").get()
   prompt_coordinates(config.group_id, config.artifact_id, function(group_id, artifact_id)
@@ -287,6 +306,29 @@ local function fetch_catalog(boot_version, callback)
   )
 end
 
+local function choose_spring_options(client, config, callback)
+  local metadata = require("java_scaffold.metadata")
+  local picker = require("java_scaffold.picker")
+  local languages = metadata.values(client, "language")
+  local packaging = metadata.values(client, "packaging")
+  picker.select_one(languages, {
+    prompt = "Spring language",
+    default = config.spring.language,
+  }, function(language)
+    if not language then
+      return
+    end
+    picker.select_one(packaging, {
+      prompt = "Spring packaging",
+      default = config.spring.packaging,
+    }, function(selected_packaging)
+      if selected_packaging then
+        callback(language, selected_packaging)
+      end
+    end)
+  end)
+end
+
 function M.new_spring()
   notify("loading Spring Initializr metadata")
   fetch_client(function(metadata_error, client)
@@ -337,25 +379,27 @@ function M.new_spring()
                 local dependency_ids = vim.tbl_map(function(item)
                   return item.id
                 end, selected)
-                notify("creating Spring project with Java " .. java_version)
-                require("java_scaffold.spring").create({
-                  url = config.spring.starter_url,
-                  cwd = vim.fn.getcwd(),
-                  group_id = group_id,
-                  artifact_id = artifact_id,
-                  java_version = java_version,
-                  boot_version = boot_version,
-                  dependencies = dependency_ids,
-                  project_type = config.spring.project_type,
-                  language = config.spring.language,
-                  packaging = config.spring.packaging,
-                  timeout = config.spring.timeout,
-                }, function(err, project_dir)
-                  if err then
-                    notify_error(err)
-                    return
-                  end
-                  finish_project(project_dir)
+                choose_spring_options(client, config, function(language, packaging)
+                  notify("creating Spring project with Java " .. java_version)
+                  require("java_scaffold.spring").create({
+                    url = config.spring.starter_url,
+                    cwd = vim.fn.getcwd(),
+                    group_id = group_id,
+                    artifact_id = artifact_id,
+                    java_version = java_version,
+                    boot_version = boot_version,
+                    dependencies = dependency_ids,
+                    project_type = config.spring.project_type,
+                    language = language,
+                    packaging = packaging,
+                    timeout = config.spring.timeout,
+                  }, function(err, project_dir)
+                    if err then
+                      notify_error(err)
+                      return
+                    end
+                    finish_project(project_dir)
+                  end)
                 end)
               end)
             end)
@@ -364,6 +408,16 @@ function M.new_spring()
       end
     )
   end)
+end
+
+function M.clear_cache()
+  local ok, err = require("java_scaffold.metadata").clear_cache()
+  if not ok then
+    notify_error(err)
+    return false
+  end
+  notify("Initializr cache cleared")
+  return true
 end
 
 local function nearest_pom()

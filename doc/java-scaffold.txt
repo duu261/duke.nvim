@@ -93,6 +93,14 @@ setup([{opts}])                              *java-scaffold.setup()*
     Apply configuration. Calling setup() without options uses defaults.
     Every call clears cached Java runtime discovery.
 
+new()                                         *java-scaffold.new()*
+    Open the unified Maven, Gradle, and Spring Boot generator picker.
+    new_maven(), new_gradle(), and new_spring() start those wizards directly.
+
+clear_cache()                           *java-scaffold.clear_cache()*
+    Delete all cached Initializr project metadata and dependency catalogs.
+    Return true on success and false when deletion fails.
+
 java_runtimes([{opts}])                *java-scaffold.java_runtimes()*
     Return the Java runtimes discovered for plugin and editor integration:
 >
@@ -132,6 +140,10 @@ Telescope, use <Tab> to toggle dependencies and <Enter> to finish. Without
 Telescope, select dependencies through vim.ui one at a time, then choose
 [Done].
 
+                                                      *:JavaScaffoldNew*
+:JavaScaffoldNew
+    Choose Maven, Gradle, or Spring Boot, then start that workflow's wizard.
+
                                                     *:JavaScaffoldMaven*
 :JavaScaffoldMaven
     Prompt for Maven coordinates and Java version. Generate a Maven quickstart
@@ -140,8 +152,8 @@ Telescope, select dependencies through vim.ui one at a time, then choose
 
                                                     *:JavaScaffoldSpring*
 :JavaScaffoldSpring
-    Prompt for Spring project coordinates, Java version, and dependencies.
-    Download and extract a Spring Initializr Maven project.
+    Prompt for Spring project coordinates, language, packaging, Java version,
+    and dependencies. Download and extract a Spring Initializr Maven project.
 
                                                     *:JavaScaffoldGradle*
 :JavaScaffoldGradle
@@ -156,6 +168,10 @@ Telescope, select dependencies through vim.ui one at a time, then choose
     If Initializr no longer supplies an old Boot version's catalog, insertion
     requires a valid same-URL cache, compatible custom server, or Boot
     upgrade.
+
+                                               *:JavaScaffoldClearCache*
+:JavaScaffoldClearCache
+    Delete all cached Initializr project metadata and dependency catalogs.
 
                                                     *:JavaScaffoldLog*
 :JavaScaffoldLog
@@ -195,6 +211,9 @@ cached under stdpath("cache")/java-scaffold.nvim after successful requests,
 separately for each configured Initializr URL. Fetch failures use those
 files. Cached data supports dependency insertion offline; new project
 archives still require network access.
+
+Use :JavaScaffoldClearCache when cached Initializr data becomes stale. The
+next metadata request fetches fresh data.
 
 Initializr may stop serving dependency catalogs for old Spring Boot
 versions. Insertion then requires a catalog for that version cached earlier
