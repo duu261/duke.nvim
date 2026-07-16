@@ -290,6 +290,10 @@ describe("plugin surface", function()
           },
         })
       end,
+      versions = function(group_id, artifact_id, callback)
+        received.version_coordinates = group_id .. ":" .. artifact_id
+        callback(nil, { "33.4.8-jre", "33.4.7-jre" })
+      end,
     }
     package.loaded["java_scaffold.picker"] = {
       input = function(_, _, callback)
@@ -306,17 +310,23 @@ describe("plugin surface", function()
         }, pom_path)
         callback(items)
       end,
+      select_one = function(items, opts, callback)
+        assert.same({ "33.4.8-jre", "33.4.7-jre" }, items)
+        assert.equals("33.4.8-jre", opts.default)
+        callback("33.4.7-jre")
+      end,
     }
 
     require("java_scaffold").add_dependency()
 
     assert.equals("guava", received.term)
+    assert.equals("com.google.guava:guava", received.version_coordinates)
     assert.equals("com.google.guava:guava", received.validated)
     assert.same({
       {
         group_id = "com.google.guava",
         artifact_id = "guava",
-        version = "33.4.8-jre",
+        version = "33.4.7-jre",
         packaging = "jar",
       },
     }, received.dependencies)
@@ -499,7 +509,13 @@ describe("plugin surface", function()
             runner_java_version = "auto",
             project_version = "0.1.0-SNAPSHOT",
             wrapper = false,
-            archetype = {},
+            archetypes = {
+              {
+                group_id = "org.apache.maven.archetypes",
+                artifact_id = "maven-archetype-quickstart",
+                version = "1.5",
+              },
+            },
             timeout = 1000,
           },
         }
@@ -534,7 +550,13 @@ describe("plugin surface", function()
     }
     package.loaded["java_scaffold.picker"] = {
       input = function(prompt, default, callback)
-        callback(prompt == "Destination directory: " and "/tmp" or default)
+        if prompt == "Destination directory: " then
+          callback("/tmp")
+        elseif prompt == "Package name: " then
+          callback("com.acme.maven")
+        else
+          callback(default)
+        end
       end,
       confirm = function(prompt)
         received.review = prompt
@@ -546,6 +568,12 @@ describe("plugin surface", function()
     }
     package.loaded["java_scaffold.maven"] = {
       validate = function()
+        return nil
+      end,
+      package_name = function()
+        return "com.example.demo"
+      end,
+      validate_package = function()
         return nil
       end,
       create = function(opts)
@@ -563,9 +591,12 @@ describe("plugin surface", function()
     assert.same({ ["23"] = "/jdk/23" }, received.runner_homes)
     assert.equals("/jdk/23", received.create.env.JAVA_HOME)
     assert.equals("/tmp", received.create.cwd)
+    assert.equals("com.acme.maven", received.create.package_name)
+    assert.equals("maven-archetype-quickstart", received.create.archetype.artifact_id)
     assert.is_truthy(received.review:find("Destination: /tmp/demo", 1, true))
     assert.is_truthy(received.review:find("Coordinates: com.example:demo", 1, true))
     assert.is_truthy(received.review:find("Build system: Maven", 1, true))
+    assert.is_truthy(received.review:find("Package: com.acme.maven", 1, true))
     assert.is_truthy(received.review:find("Java target: 23", 1, true))
     assert.is_truthy(received.review:find("Runner JVM: 23", 1, true))
 
@@ -595,6 +626,8 @@ describe("plugin surface", function()
             timeout = 1000,
             default_project_type = "java-application",
             project_types = { { id = "java-application", name = "Java application" } },
+            languages = { "java", "kotlin", "groovy" },
+            dsls = { "kotlin", "groovy" },
           },
         }
       end,
@@ -624,20 +657,42 @@ describe("plugin surface", function()
       validate = function()
         return nil
       end,
+      package_name = function()
+        return "com.example.demo"
+      end,
+      validate_package = function()
+        return nil
+      end,
     }
     package.loaded["java_scaffold.picker"] = {
       input = function(prompt, default, callback)
-        callback(prompt == "Destination directory: " and "/tmp" or default)
+        if prompt == "Destination directory: " then
+          callback("/tmp")
+        elseif prompt == "Package name: " then
+          callback("com.acme.gradle")
+        else
+          callback(default)
+        end
       end,
       confirm = function(prompt)
         received.review = prompt
         return true
       end,
-      select_one = function(items, _, callback)
-        callback(items[1])
+      select_one = function(items, opts, callback)
+        local selected = {
+          ["Gradle source language"] = "kotlin",
+          ["Gradle DSL"] = "groovy",
+        }
+        if opts.prompt == "Gradle DSL" then
+          received.dsl_default = opts.default
+        end
+        callback(selected[opts.prompt] or items[1])
       end,
     }
     package.loaded["java_scaffold.gradle"] = {
+      project_type = function(language, project_type)
+        return project_type:gsub("^java", language)
+      end,
       create = function(opts)
         received.create = opts
       end,
@@ -646,10 +701,139 @@ describe("plugin surface", function()
     require("java_scaffold").new_gradle()
 
     assert.equals("/tmp", received.create.cwd)
+    assert.equals("com.acme.gradle", received.create.package_name)
+    assert.equals("kotlin-application", received.create.project_type)
+    assert.equals("groovy", received.create.dsl)
+    assert.equals("kotlin", received.dsl_default)
     assert.is_truthy(received.review:find("Destination: /tmp/demo", 1, true))
     assert.is_truthy(received.review:find("Coordinates: com.example:demo", 1, true))
     assert.is_truthy(received.review:find("Build system: Gradle - Java application", 1, true))
+    assert.is_truthy(received.review:find("Package: com.acme.gradle", 1, true))
+    assert.is_truthy(received.review:find("Source language: kotlin", 1, true))
+    assert.is_truthy(received.review:find("Build DSL: groovy", 1, true))
     assert.is_truthy(received.review:find("Java target: 23", 1, true))
     assert.is_truthy(received.review:find("Runner JVM: 23", 1, true))
+  end)
+
+  it("keeps derived packages for blank input and rejects reserved packages", function()
+    local created = { maven = {}, gradle = {} }
+    local package_input = ""
+    local active_kind
+    package.loaded["java_scaffold"] = nil
+    package.loaded["java_scaffold.config"] = {
+      get = function()
+        return {
+          group_id = "com.example",
+          artifact_id = "demo",
+          java_versions = {},
+          java_homes = {},
+          java_version = "23",
+          maven = {
+            command = "mvn",
+            runner_java_version = "auto",
+            project_version = "1.0-SNAPSHOT",
+            wrapper = false,
+            timeout = 1000,
+            archetypes = {
+              {
+                group_id = "org.apache.maven.archetypes",
+                artifact_id = "maven-archetype-quickstart",
+                version = "1.5",
+              },
+            },
+          },
+          gradle = {
+            command = "gradle",
+            runner_java_version = "auto",
+            dsl = "kotlin",
+            dsls = { "kotlin", "groovy" },
+            languages = { "java", "kotlin", "groovy" },
+            test_framework = "auto",
+            timeout = 1000,
+            default_project_type = "java-application",
+            project_types = { { id = "java-application", name = "Java application" } },
+          },
+        }
+      end,
+    }
+    package.loaded["java_scaffold.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["23"] = "/jdk/23" }
+      end,
+      installed = function()
+        return { "23" }
+      end,
+      default = function()
+        return "23"
+      end,
+      runner_env = function()
+        return { JAVA_HOME = "/jdk/23" }
+      end,
+      maven_runtime_async = function(_, callback)
+        callback("23")
+      end,
+      gradle_runtime_async = function(_, callback)
+        callback("23")
+      end,
+    }
+    package.loaded["java_scaffold.maven"] = {
+      validate = function()
+        return nil
+      end,
+      package_name = function()
+        return "com.example.demo"
+      end,
+      validate_package = function(value)
+        return value == "com.class.demo" and "package name contains invalid segments" or nil
+      end,
+      create = function(opts)
+        created.maven[#created.maven + 1] = opts
+      end,
+    }
+    package.loaded["java_scaffold.gradle"] = {
+      project_type = function(language, project_type)
+        return project_type:gsub("^java", language)
+      end,
+      create = function(opts)
+        created.gradle[#created.gradle + 1] = opts
+      end,
+    }
+    package.loaded["java_scaffold.picker"] = {
+      input = function(prompt, default, callback)
+        if prompt == "Destination directory: " then
+          callback("/tmp")
+        elseif prompt == "Package name: " then
+          callback(package_input)
+        else
+          callback(default)
+        end
+      end,
+      confirm = function()
+        return true
+      end,
+      select_one = function(items, opts, callback)
+        if opts.prompt == "Gradle source language" or opts.prompt == "Gradle DSL" then
+          callback(opts.default)
+        else
+          callback(items[1])
+        end
+      end,
+    }
+
+    local plugin = require("java_scaffold")
+    for _, kind in ipairs({ "maven", "gradle" }) do
+      active_kind = kind
+      plugin["new_" .. active_kind]()
+      assert.equals("com.example.demo", created[kind][1].package_name)
+    end
+
+    package_input = "com.class.demo"
+    plugin.new_maven()
+    plugin.new_gradle()
+    assert.equals(1, #created.maven)
+    assert.equals(1, #created.gradle)
   end)
 end)

@@ -4,6 +4,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- Package prompts for Maven and Gradle, Maven archetype selection, Gradle source-language and DSL selection, and single-artifact Maven Central version selection.
+
+### Fixed
+
+- Reject Java reserved words in package segments, keep valid Maven Central rows beside malformed rows, and report Maven Central timeouts and HTTP 429 rate limits directly.
+
 ## 0.2.0 - 2026-07-16
 
 ### Added

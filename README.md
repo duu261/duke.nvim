@@ -4,8 +4,8 @@ Create Maven, Gradle, and Spring Boot projects safely from Neovim, then open gen
 
 ## ✨ Features
 
-- Maven quickstart projects with optional Maven Wrapper generation.
-- Wrapper-backed Gradle applications, libraries, and Gradle plugins.
+- Maven quickstart and web application archetypes with optional Maven Wrapper generation.
+- Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and Gradle plugins.
 - Spring Boot Maven and Gradle projects using live Spring Initializr choices.
 - Unified project generator picker plus direct workflow commands.
 - Safe dependency insertion from Spring catalogs or Maven Central into an existing `pom.xml`.
@@ -19,7 +19,7 @@ Create Maven, Gradle, and Spring Boot projects safely from Neovim, then open gen
 | --- | --- |
 | Neovim 0.11+ | Plugin core |
 | `java` | Java discovery and project workflows |
-| `mvn` | Maven quickstart and optional Maven Wrapper generation |
+| `mvn` | Maven archetype generation and optional Maven Wrapper generation |
 | `gradle` | Gradle project generation |
 | `curl` | Spring requests and Maven Central dependency search |
 | `tar` | Spring archive inspection and extraction |
@@ -60,7 +60,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 1. Install plugin and restart Neovim.
 2. Run `:JavaScaffoldHealth` to load a lazy installation and check available tools.
 3. Run `:JavaScaffoldNew`, then choose Maven, Gradle, or Spring Boot. Direct workflow commands remain available.
-4. Choose the destination parent directory, coordinates, project options, Java target, and Spring dependencies when applicable. Spring also prompts for project name, description, package, Boot version, and Maven or Gradle build type.
+4. Choose the destination parent directory, coordinates, package, project options, Java target, and Spring dependencies when applicable. Maven also prompts for an archetype. Gradle prompts for source language and build-script DSL. Spring also prompts for project name, description, Boot version, and Maven or Gradle build type.
 5. Review the final destination and selected settings, then confirm creation.
 
 Example:
@@ -76,8 +76,8 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 | Command | Action |
 | --- | --- |
 | `:JavaScaffoldNew` | Choose Maven, Gradle, or Spring Boot, then run its wizard |
-| `:JavaScaffoldMaven` | Create Maven quickstart project |
-| `:JavaScaffoldGradle` | Create Gradle application, library, or plugin |
+| `:JavaScaffoldMaven` | Create Maven quickstart or web application project |
+| `:JavaScaffoldGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
 | `:JavaScaffoldSpring` | Create Spring Boot Maven or Gradle project |
 | `:JavaScaffoldAddDependency` | Add dependencies to nearest `pom.xml` from Spring catalog or Maven Central |
 | `:JavaScaffoldClearCache` | Delete all cached Initializr metadata and dependency catalogs |
@@ -112,16 +112,27 @@ require("java_scaffold").setup({
     central_search_url = "https://search.maven.org/solrsearch/select",
     central_search_rows = 20,
     central_search_timeout = 15000,
-    archetype = {
-      group_id = "org.apache.maven.archetypes",
-      artifact_id = "maven-archetype-quickstart",
-      version = "1.5",
+    archetypes = {
+      {
+        name = "Maven quickstart",
+        group_id = "org.apache.maven.archetypes",
+        artifact_id = "maven-archetype-quickstart",
+        version = "1.5",
+      },
+      {
+        name = "Maven web application",
+        group_id = "org.apache.maven.archetypes",
+        artifact_id = "maven-archetype-webapp",
+        version = "1.5",
+      },
     },
   },
   gradle = {
     command = "gradle",
     runner_java_version = "auto", -- active Java; toolchain targets selection
     dsl = "kotlin",
+    dsls = { "kotlin", "groovy" },
+    languages = { "java", "kotlin", "groovy" },
     test_framework = "auto", -- JUnit 4 for Java 8/11; Jupiter for 17+
     timeout = 180000,
     default_project_type = "java-application",
@@ -185,7 +196,7 @@ Run `:JavaScaffoldClearCache` when cached Initializr data becomes stale. Next me
 
 Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration.
 
-For a plain Maven pom, `:JavaScaffoldAddDependency` prompts for a Maven Central query, shows `groupId:artifactId` plus latest version, and inserts selected non-`pom` artifacts. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
+For a plain Maven pom, `:JavaScaffoldAddDependency` prompts for a Maven Central query and shows `groupId:artifactId` plus latest version. Selecting one artifact opens a newest-first version picker defaulted to that latest version. Multi-select keeps each artifact's latest version. Malformed result rows are skipped without discarding valid neighbors, and `pom` artifacts remain excluded. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
 
 No Boot versions are hardcoded into the picker. Old-version lookup happens only when the dependency command reads an existing `pom.xml`.
 
@@ -247,7 +258,7 @@ The plugin deliberately does not run applications, format code, execute tests, e
 3. Check the executable required by the selected workflow.
 4. For old-Boot catalog rejection, use same-URL cache, compatible custom Initializr server, or upgrade Boot.
 5. Ensure custom Initializr URLs use HTTPS.
-6. Retry Maven Central search later after HTTP 429 or another network failure; no offline search cache exists.
+6. Retry Maven Central search after a reported timeout or HTTP 429 rate limit; no offline search cache exists.
 7. If promotion reports an existing target, choose another artifact ID or move the user-created target.
 
 ## Local development

@@ -70,6 +70,24 @@ describe("Maven scaffolding", function()
     }, args)
   end)
 
+  it("passes selected archetype coordinates to Maven", function()
+    local args = maven.build_args({
+      group_id = "com.example",
+      artifact_id = "web-demo",
+      java_version = "21",
+      cwd = "/tmp/projects",
+      version = "1.0-SNAPSHOT",
+      archetype = {
+        group_id = "org.apache.maven.archetypes",
+        artifact_id = "maven-archetype-webapp",
+        version = "1.5",
+      },
+    })
+
+    assert.is_truthy(vim.tbl_contains(args, "-DarchetypeArtifactId=maven-archetype-webapp"))
+    assert.is_truthy(vim.tbl_contains(args, "-DarchetypeVersion=1.5"))
+  end)
+
   it("validates Maven coordinates", function()
     assert.is_nil(maven.validate("com.example", "demo-api"))
     assert.matches("groupId", maven.validate("bad group", "demo-api"))
@@ -77,7 +95,12 @@ describe("Maven scaffolding", function()
   end)
 
   it("validates Java package names", function()
-    for _, package_name in ipairs({ "com.example.demo", "example2.api", "_internal.api" }) do
+    for _, package_name in ipairs({
+      "com.example.demo",
+      "example2.api",
+      "_internal.api",
+      "com.classes.app",
+    }) do
       assert.is_nil(maven.validate_package(package_name))
     end
     for _, package_name in ipairs({
@@ -88,6 +111,9 @@ describe("Maven scaffolding", function()
       ".com.example",
       "com.example.",
       "com example",
+      "com.class.app",
+      "com.enum.x",
+      "com._.app",
     }) do
       assert.matches("package", maven.validate_package(package_name))
     end

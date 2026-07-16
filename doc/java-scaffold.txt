@@ -48,16 +48,27 @@ absolute paths, parent traversal, symlinks, and hardlinks are rejected.
       central_search_url = "https://search.maven.org/solrsearch/select",
       central_search_rows = 20,
       central_search_timeout = 15000,
-      archetype = {
-        group_id = "org.apache.maven.archetypes",
-        artifact_id = "maven-archetype-quickstart",
-        version = "1.5",
+      archetypes = {
+        {
+          name = "Maven quickstart",
+          group_id = "org.apache.maven.archetypes",
+          artifact_id = "maven-archetype-quickstart",
+          version = "1.5",
+        },
+        {
+          name = "Maven web application",
+          group_id = "org.apache.maven.archetypes",
+          artifact_id = "maven-archetype-webapp",
+          version = "1.5",
+        },
       },
     },
     gradle = {
       command = "gradle",
       runner_java_version = "auto",
       dsl = "kotlin",
+      dsls = { "kotlin", "groovy" },
+      languages = { "java", "kotlin", "groovy" },
       test_framework = "auto",
       timeout = 180000,
       default_project_type = "java-application",
@@ -152,9 +163,10 @@ then choose [Done].
 
                                                     *:JavaScaffoldMaven*
 :JavaScaffoldMaven
-    Prompt for destination, Maven coordinates, and Java version. Review the
-    project, then generate a Maven quickstart. When maven.wrapper is true,
-    generate mvnw before promotion and require all Maven Wrapper files.
+    Pick a Maven archetype, then prompt for destination, coordinates, package,
+    and Java version. Review the project, then generate it. A single configured
+    archetype skips the picker. When maven.wrapper is true, generate mvnw before
+    promotion and require all Maven Wrapper files.
 
                                                     *:JavaScaffoldSpring*
 :JavaScaffoldSpring
@@ -165,17 +177,20 @@ then choose [Done].
 
                                                     *:JavaScaffoldGradle*
 :JavaScaffoldGradle
-    Prompt for destination, coordinates, Gradle project type, and Java version.
-    Review the project, then generate a wrapper-backed Gradle application,
-    library, or Gradle plugin.
+    Prompt for destination, coordinates, package, Gradle project type, source
+    language, build-script DSL, and Java version. Review the project, then
+    generate a wrapper-backed Java, Kotlin, or Groovy application, library, or
+    Gradle plugin.
 
                                               *:JavaScaffoldAddDependency*
 :JavaScaffoldAddDependency
     Find the nearest pom.xml. For Spring Boot, resolve selected Initializr
     dependency IDs. For plain Maven, search Maven Central and select results
-    showing groupId:artifactId plus latest version. Insert non-duplicate
-    dependency blocks. BOM, repository, annotation-processor, and Maven
-    Central pom-packaging entries are excluded. If Initializr no longer
+    showing groupId:artifactId plus latest version. A single artifact opens a
+    newest-first version picker; multi-select keeps the shown latest versions.
+    Insert non-duplicate dependency blocks. BOM, repository,
+    annotation-processor, and Maven Central pom-packaging entries are excluded.
+    If Initializr no longer
     supplies an old Boot version's catalog, insertion requires a valid
     same-URL cache, compatible custom server, or Boot upgrade. Maven Central
     search needs live network access and has no offline fallback.
@@ -256,7 +271,7 @@ For failures:
 4. For old-Boot catalog rejection, use a same-URL cache, compatible custom
    Initializr server, or upgrade Boot.
 5. Ensure custom Initializr URLs use HTTPS.
-6. Retry Maven Central search later after HTTP 429 or another network failure.
+6. Retry Maven Central search after a reported timeout or HTTP 429 rate limit.
 7. An existing-target error means the path belongs to the user. Choose another
    artifact ID or move the target; the plugin will not delete it.
 

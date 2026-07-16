@@ -50,7 +50,8 @@ describe("Maven Central search", function()
       },
     }))
     assert.is_true(search.is_search_result({ response = { docs = {} } }))
-    assert.is_false(search.is_search_result({ response = { docs = { { g = "g", a = "a" } } } }))
+    assert.is_true(search.is_search_result({ response = { docs = { { g = "g", a = "a" } } } }))
+    assert.is_false(search.is_search_result({ response = "broken" }))
     assert.is_false(search.is_search_result({ response = { docs = "broken" } }))
   end)
 
@@ -95,20 +96,103 @@ describe("Maven Central search", function()
     }, received)
   end)
 
-  it("reports process and malformed response errors", function()
-    local errors = {}
-    search.search("guava", function(err)
-      errors[#errors + 1] = err
+  it("keeps valid docs when neighboring docs are malformed", function()
+    local received
+    search.search("guava", function(err, results)
+      assert.is_nil(err)
+      received = results
     end, function(_, _, _, callback)
-      callback({ code = 22, stdout = "", stderr = "rate limited" })
-    end)
-    search.search("guava", function(err)
-      errors[#errors + 1] = err
-    end, function(_, _, _, callback)
-      callback({ code = 0, stdout = "{}", stderr = "" })
+      callback({
+        code = 0,
+        stdout = vim.json.encode({
+          response = {
+            docs = {
+              { g = "com.google.guava", a = "guava", latestVersion = "33.4.8-jre", p = "jar" },
+              { g = "broken", a = "missing-version" },
+            },
+          },
+        }),
+        stderr = "",
+      })
     end)
 
-    assert.matches("rate limited", errors[1])
-    assert.matches("unexpected structure", errors[2])
+    assert.equals(1, #received)
+    assert.equals("guava", received[1].artifact_id)
+  end)
+
+  it("returns an empty list when every result doc is malformed", function()
+    local received
+    search.search("broken", function(err, results)
+      assert.is_nil(err)
+      received = results
+    end, function(_, _, _, callback)
+      callback({
+        code = 0,
+        stdout = vim.json.encode({ response = { docs = { {}, { g = "g", a = "a", p = 42 } } } }),
+        stderr = "",
+      })
+    end)
+
+    assert.same({}, received)
+  end)
+
+  it("reports invalid envelopes", function()
+    local received
+    search.search("guava", function(err)
+      received = err
+    end, function(_, _, _, callback)
+      callback({ code = 0, stdout = vim.json.encode({ response = "broken" }), stderr = "" })
+    end)
+
+    assert.matches("unexpected structure", received)
+  end)
+
+  it("reports actionable process errors", function()
+    local function error_for(result)
+      local received
+      search.search("guava", function(err)
+        received = err
+      end, function(_, _, _, callback)
+        callback(result)
+      end)
+      return received
+    end
+
+    assert.matches("timed out", error_for({ code = 28, stdout = "", stderr = "timeout" }))
+    local limited = error_for({ code = 22, stdout = "", stderr = "curl: HTTP 429" })
+    assert.matches("rate%-limited", limited)
+    assert.matches("429", limited)
+    assert.equals(
+      "Maven Central search failed: connection refused",
+      error_for({ code = 7, stdout = "fallback", stderr = "connection refused" })
+    )
+  end)
+
+  it("builds a gav query and returns versions newest first", function()
+    local received
+    search.versions("com.google.guava", "guava", function(err, versions)
+      assert.is_nil(err)
+      received = versions
+    end, function(command, args, opts, callback)
+      assert.equals("curl", command)
+      assert.equals(15000, opts.timeout)
+      assert.equals('q=g:"com.google.guava" AND a:"guava"', args[9])
+      assert.equals("core=gav", args[11])
+      assert.equals("sort=timestamp desc", args[15])
+      callback({
+        code = 0,
+        stdout = vim.json.encode({
+          response = {
+            docs = {
+              { v = "33.4.8-jre", timestamp = 2 },
+              { v = "33.4.7-jre", timestamp = 1 },
+            },
+          },
+        }),
+        stderr = "",
+      })
+    end)
+
+    assert.same({ "33.4.8-jre", "33.4.7-jre" }, received)
   end)
 end)

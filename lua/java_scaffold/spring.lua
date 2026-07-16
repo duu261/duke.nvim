@@ -86,9 +86,16 @@ local function unsafe_archive_link(member_output, verbose_output)
 end
 
 function M.create(opts, callback)
-  local validation_error = require("java_scaffold.maven").validate(opts.group_id, opts.artifact_id)
+  local maven = require("java_scaffold.maven")
+  local validation_error = maven.validate(opts.group_id, opts.artifact_id)
   if validation_error then
     callback(validation_error)
+    return
+  end
+  local package_error =
+    maven.validate_package(opts.package_name or M.package_name(opts.group_id, opts.artifact_id))
+  if package_error then
+    callback(package_error)
     return
   end
   if opts.build ~= "maven" and opts.build ~= "gradle" then

@@ -102,6 +102,26 @@ local function prompt_project(group_default, artifact_default, callback)
   end)
 end
 
+local function prompt_package(group_id, artifact_id, callback)
+  local maven = require("java_scaffold.maven")
+  local derived = maven.package_name(group_id, artifact_id)
+  require("java_scaffold.picker").input("Package name: ", derived, function(package_name)
+    if package_name == nil then
+      return
+    end
+    package_name = vim.trim(package_name)
+    if package_name == "" then
+      package_name = derived
+    end
+    local package_error = maven.validate_package(package_name)
+    if package_error then
+      notify_error(package_error)
+      return
+    end
+    callback(package_name)
+  end)
+end
+
 local function confirm_project(fields)
   local lines = { "Review project" }
   for _, field in ipairs(fields) do
@@ -200,132 +220,191 @@ end
 
 function M.new_maven()
   local config = require("java_scaffold.config").get()
-  prompt_project(config.group_id, config.artifact_id, function(destination, group_id, artifact_id)
-    local java, runtimes, versions = java_choices(config)
-    choose_java(versions, config.java_version, runtimes.active, function(java_version, java_error)
-      if java_error then
-        notify_error(java_error)
-        return
-      end
-      if not java_version then
-        return
-      end
-      local runner_version =
-        java.default(config.maven.runner_java_version, versions, runtimes.active)
-      local runner_env = java.runner_env(runner_version, config.java_homes, runtimes.homes)
-      if
-        not confirm_project({
-          { "Destination", vim.fs.joinpath(destination, artifact_id) },
-          { "Coordinates", group_id .. ":" .. artifact_id },
-          { "Build system", "Maven" },
-          { "Java target", java_version },
-          { "Runner JVM", runner_version or "system" },
-        })
-      then
-        return
-      end
-      notify("detecting Maven runtime")
-      java.maven_runtime_async(config.maven.command, function(detected_runtime)
-        local maven_runtime = detected_runtime or runtimes.active
-        if maven_runtime and tonumber(java_version) > tonumber(maven_runtime) then
-          notify(
-            string.format(
-              "Java %s exceeds Maven runner Java %s; configure Maven runner JDK or toolchain",
-              java_version,
-              maven_runtime
-            ),
-            vim.log.levels.WARN
-          )
-        end
-        notify("creating Maven project with Java " .. java_version)
-        require("java_scaffold.maven").create({
-          command = config.maven.command,
-          cwd = destination,
-          group_id = group_id,
-          artifact_id = artifact_id,
-          version = config.maven.project_version,
-          wrapper = config.maven.wrapper,
-          java_version = java_version,
-          archetype = config.maven.archetype,
-          timeout = config.maven.timeout,
-          env = runner_env,
-        }, function(err, project_dir)
-          if err then
-            notify_error(err)
-            return
+  local function selected_archetype(archetype)
+    if not archetype then
+      return
+    end
+    prompt_project(config.group_id, config.artifact_id, function(destination, group_id, artifact_id)
+      prompt_package(group_id, artifact_id, function(package_name)
+        local java, runtimes, versions = java_choices(config)
+        choose_java(
+          versions,
+          config.java_version,
+          runtimes.active,
+          function(java_version, java_error)
+            if java_error then
+              notify_error(java_error)
+              return
+            end
+            if not java_version then
+              return
+            end
+            local runner_version =
+              java.default(config.maven.runner_java_version, versions, runtimes.active)
+            local runner_env = java.runner_env(runner_version, config.java_homes, runtimes.homes)
+            if
+              not confirm_project({
+                { "Destination", vim.fs.joinpath(destination, artifact_id) },
+                { "Coordinates", group_id .. ":" .. artifact_id },
+                { "Package", package_name },
+                { "Build system", "Maven - " .. (archetype.name or archetype.artifact_id) },
+                { "Java target", java_version },
+                { "Runner JVM", runner_version or "system" },
+              })
+            then
+              return
+            end
+            notify("detecting Maven runtime")
+            java.maven_runtime_async(config.maven.command, function(detected_runtime)
+              local maven_runtime = detected_runtime or runtimes.active
+              if maven_runtime and tonumber(java_version) > tonumber(maven_runtime) then
+                notify(
+                  string.format(
+                    "Java %s exceeds Maven runner Java %s; configure Maven runner JDK or toolchain",
+                    java_version,
+                    maven_runtime
+                  ),
+                  vim.log.levels.WARN
+                )
+              end
+              notify("creating Maven project with Java " .. java_version)
+              require("java_scaffold.maven").create({
+                command = config.maven.command,
+                cwd = destination,
+                group_id = group_id,
+                artifact_id = artifact_id,
+                package_name = package_name,
+                version = config.maven.project_version,
+                wrapper = config.maven.wrapper,
+                java_version = java_version,
+                archetype = archetype,
+                timeout = config.maven.timeout,
+                env = runner_env,
+              }, function(err, project_dir)
+                if err then
+                  notify_error(err)
+                  return
+                end
+                finish_project(project_dir)
+              end)
+            end, config.maven.timeout, runner_env)
           end
-          finish_project(project_dir)
-        end)
-      end, config.maven.timeout, runner_env)
+        )
+      end)
     end)
-  end)
+  end
+
+  if #config.maven.archetypes == 1 then
+    selected_archetype(config.maven.archetypes[1])
+    return
+  end
+  require("java_scaffold.picker").select_one(config.maven.archetypes, {
+    prompt = "Maven archetype",
+    default = config.maven.archetypes[1],
+    format_item = function(item)
+      return item.name or (item.group_id .. ":" .. item.artifact_id .. ":" .. item.version)
+    end,
+  }, selected_archetype)
 end
 
 function M.new_gradle()
   local config = require("java_scaffold.config").get()
   prompt_project(config.group_id, config.artifact_id, function(destination, group_id, artifact_id)
-    require("java_scaffold.picker").select_one(config.gradle.project_types, {
-      prompt = "Gradle project type",
-      default = config.gradle.default_project_type,
-    }, function(project_type)
-      if not project_type then
-        return
-      end
-      local java, runtimes, versions = java_choices(config)
-      choose_java(versions, config.java_version, runtimes.active, function(java_version, java_error)
-        if java_error then
-          notify_error(java_error)
+    prompt_package(group_id, artifact_id, function(package_name)
+      require("java_scaffold.picker").select_one(config.gradle.project_types, {
+        prompt = "Gradle project type",
+        default = config.gradle.default_project_type,
+      }, function(project_type)
+        if not project_type then
           return
         end
-        if not java_version then
-          return
-        end
-        local runner_version =
-          java.default(config.gradle.runner_java_version, versions, runtimes.active)
-        local runner_env = java.runner_env(runner_version, config.java_homes, runtimes.homes)
-        if
-          not confirm_project({
-            { "Destination", vim.fs.joinpath(destination, artifact_id) },
-            { "Coordinates", group_id .. ":" .. artifact_id },
-            { "Build system", "Gradle - " .. project_type.name },
-            { "Java target", java_version },
-            { "Runner JVM", runner_version or "system" },
-          })
-        then
-          return
-        end
-        notify("detecting Gradle runtime")
-        java.gradle_runtime_async(config.gradle.command, function(detected_runtime)
-          if detected_runtime and tonumber(java_version) > tonumber(detected_runtime) then
-            notify(
-              string.format(
-                "Java %s exceeds Gradle runner Java %s; configure Gradle toolchain",
-                java_version,
-                detected_runtime
-              ),
-              vim.log.levels.WARN
-            )
+        require("java_scaffold.picker").select_one(config.gradle.languages, {
+          prompt = "Gradle source language",
+          default = "java",
+        }, function(language)
+          if not language then
+            return
           end
-          notify("creating Gradle project with Java " .. java_version)
-          require("java_scaffold.gradle").create({
-            command = config.gradle.command,
-            cwd = destination,
-            group_id = group_id,
-            artifact_id = artifact_id,
-            java_version = java_version,
-            project_type = project_type.id,
-            dsl = config.gradle.dsl,
-            test_framework = config.gradle.test_framework,
-            timeout = config.gradle.timeout,
-            env = runner_env,
-          }, function(err, project_dir)
-            if err then
-              notify_error(err)
+          local init_type = require("java_scaffold.gradle").project_type(language, project_type.id)
+          if not init_type then
+            notify_error("unsupported Gradle source language and project type combination")
+            return
+          end
+          require("java_scaffold.picker").select_one(config.gradle.dsls, {
+            prompt = "Gradle DSL",
+            default = config.gradle.dsl,
+          }, function(dsl)
+            if not dsl then
               return
             end
-            finish_project(project_dir)
+            local java, runtimes, versions = java_choices(config)
+            choose_java(
+              versions,
+              config.java_version,
+              runtimes.active,
+              function(java_version, java_error)
+                if java_error then
+                  notify_error(java_error)
+                  return
+                end
+                if not java_version then
+                  return
+                end
+                local runner_version =
+                  java.default(config.gradle.runner_java_version, versions, runtimes.active)
+                local runner_env =
+                  java.runner_env(runner_version, config.java_homes, runtimes.homes)
+                if
+                  not confirm_project({
+                    { "Destination", vim.fs.joinpath(destination, artifact_id) },
+                    { "Coordinates", group_id .. ":" .. artifact_id },
+                    { "Package", package_name },
+                    { "Build system", "Gradle - " .. project_type.name },
+                    { "Source language", language },
+                    { "Build DSL", dsl },
+                    { "Java target", java_version },
+                    { "Runner JVM", runner_version or "system" },
+                  })
+                then
+                  return
+                end
+                notify("detecting Gradle runtime")
+                java.gradle_runtime_async(config.gradle.command, function(detected_runtime)
+                  if detected_runtime and tonumber(java_version) > tonumber(detected_runtime) then
+                    notify(
+                      string.format(
+                        "Java %s exceeds Gradle runner Java %s; configure Gradle toolchain",
+                        java_version,
+                        detected_runtime
+                      ),
+                      vim.log.levels.WARN
+                    )
+                  end
+                  notify("creating Gradle project with Java " .. java_version)
+                  require("java_scaffold.gradle").create({
+                    command = config.gradle.command,
+                    cwd = destination,
+                    group_id = group_id,
+                    artifact_id = artifact_id,
+                    package_name = package_name,
+                    java_version = java_version,
+                    project_type = init_type,
+                    dsl = dsl,
+                    test_framework = config.gradle.test_framework,
+                    timeout = config.gradle.timeout,
+                    env = runner_env,
+                  }, function(err, project_dir)
+                    if err then
+                      notify_error(err)
+                      return
+                    end
+                    finish_project(project_dir)
+                  end)
+                end, config.gradle.timeout, runner_env)
+              end
+            )
           end)
-        end, config.gradle.timeout, runner_env)
+        end)
       end)
     end)
   end)
@@ -608,6 +687,72 @@ local function save_pom(path, lines, buffer, was_modified)
   return true
 end
 
+local function insert_maven_dependencies(pom_path, selected)
+  local maven = require("java_scaffold.maven")
+  for _, dependency in ipairs(selected) do
+    local coordinate_error = maven.validate(dependency.group_id, dependency.artifact_id)
+    if coordinate_error then
+      notify_error("invalid Maven Central coordinate: " .. coordinate_error)
+      return
+    end
+  end
+  local latest_lines, buffer, was_modified = read_pom(pom_path)
+  if not latest_lines then
+    notify_error("cannot reread " .. pom_path)
+    return
+  end
+  if require("java_scaffold.pom").spring_boot_version(latest_lines) then
+    notify_error("pom.xml became a Spring Boot project; run command again")
+    return
+  end
+  local updated, added, insert_error = require("java_scaffold.pom").insert(latest_lines, selected)
+  if insert_error then
+    notify_error(insert_error)
+    return
+  end
+  if added == 0 then
+    notify("selected dependencies already exist")
+    return
+  end
+  local saved = save_pom(pom_path, updated, buffer, was_modified)
+  local suffix = saved and "" or " (buffer left unsaved)"
+  notify(string.format("added %d dependencies%s", added, suffix))
+end
+
+local function choose_maven_versions(pom_path, selected)
+  if #selected ~= 1 then
+    insert_maven_dependencies(pom_path, selected)
+    return
+  end
+  local dependency = selected[1]
+  require("java_scaffold.maven_central").versions(
+    dependency.group_id,
+    dependency.artifact_id,
+    function(err, versions)
+      if err then
+        notify_error(err)
+        return
+      end
+      if #versions == 0 then
+        versions = { dependency.version }
+      elseif not vim.tbl_contains(versions, dependency.version) then
+        table.insert(versions, 1, dependency.version)
+      end
+      require("java_scaffold.picker").select_one(versions, {
+        prompt = "Maven Central version",
+        default = dependency.version,
+      }, function(version)
+        if not version then
+          return
+        end
+        local chosen = vim.deepcopy(dependency)
+        chosen.version = version
+        insert_maven_dependencies(pom_path, { chosen })
+      end)
+    end
+  )
+end
+
 function M.add_dependency()
   local pom_path = nearest_pom()
   if not pom_path then
@@ -645,36 +790,7 @@ function M.add_dependency()
           if not selected or #selected == 0 then
             return
           end
-          local maven = require("java_scaffold.maven")
-          for _, dependency in ipairs(selected) do
-            local coordinate_error = maven.validate(dependency.group_id, dependency.artifact_id)
-            if coordinate_error then
-              notify_error("invalid Maven Central coordinate: " .. coordinate_error)
-              return
-            end
-          end
-          local latest_lines, buffer, was_modified = read_pom(pom_path)
-          if not latest_lines then
-            notify_error("cannot reread " .. pom_path)
-            return
-          end
-          if require("java_scaffold.pom").spring_boot_version(latest_lines) then
-            notify_error("pom.xml became a Spring Boot project; run command again")
-            return
-          end
-          local updated, added, insert_error =
-            require("java_scaffold.pom").insert(latest_lines, selected)
-          if insert_error then
-            notify_error(insert_error)
-            return
-          end
-          if added == 0 then
-            notify("selected dependencies already exist")
-            return
-          end
-          local saved = save_pom(pom_path, updated, buffer, was_modified)
-          local suffix = saved and "" or " (buffer left unsaved)"
-          notify(string.format("added %d dependencies%s", added, suffix))
+          choose_maven_versions(pom_path, selected)
         end)
       end)
     end)

@@ -66,6 +66,12 @@ describe("Gradle scaffolding", function()
     assert.equals("junit", args[framework_index + 1])
   end)
 
+  it("maps Kotlin applications to the Gradle init type", function()
+    assert.equals("kotlin-application", gradle.project_type("kotlin", "java-application"))
+    assert.equals("groovy-library", gradle.project_type("groovy", "java-library"))
+    assert.is_nil(gradle.project_type("scala", "java-application"))
+  end)
+
   it("promotes only a generated Gradle project", function()
     local cwd = vim.fn.tempname()
     vim.fn.mkdir(cwd, "p")

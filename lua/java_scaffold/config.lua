@@ -16,16 +16,27 @@ local defaults = {
     central_search_url = "https://search.maven.org/solrsearch/select",
     central_search_rows = 20,
     central_search_timeout = 15000,
-    archetype = {
-      group_id = "org.apache.maven.archetypes",
-      artifact_id = "maven-archetype-quickstart",
-      version = "1.5",
+    archetypes = {
+      {
+        name = "Maven quickstart",
+        group_id = "org.apache.maven.archetypes",
+        artifact_id = "maven-archetype-quickstart",
+        version = "1.5",
+      },
+      {
+        name = "Maven web application",
+        group_id = "org.apache.maven.archetypes",
+        artifact_id = "maven-archetype-webapp",
+        version = "1.5",
+      },
     },
   },
   gradle = {
     command = "gradle",
     runner_java_version = "auto",
     dsl = "kotlin",
+    dsls = { "kotlin", "groovy" },
+    languages = { "java", "kotlin", "groovy" },
     test_framework = "auto",
     timeout = 180000,
     default_project_type = "java-application",
@@ -89,11 +100,6 @@ local function validate(opts)
       opts[key] = vim.deepcopy(defaults[key])
     end
   end
-  if type(opts.maven.archetype) ~= "table" then
-    warn("maven.archetype", "a table")
-    opts.maven.archetype = vim.deepcopy(defaults.maven.archetype)
-  end
-
   if not non_empty_string(opts.group_id) then
     warn("group_id", "a non-empty string")
     opts.group_id = defaults.group_id
@@ -181,11 +187,31 @@ local function validate(opts)
     warn("maven.central_search_timeout", "a positive number")
     opts.maven.central_search_timeout = defaults.maven.central_search_timeout
   end
-  for _, key in ipairs({ "group_id", "artifact_id", "version" }) do
-    if not non_empty_string(opts.maven.archetype[key]) then
-      warn("maven.archetype." .. key, "a non-empty string")
-      opts.maven.archetype[key] = defaults.maven.archetype[key]
+  local valid_archetypes = type(opts.maven.archetypes) == "table" and #opts.maven.archetypes > 0
+  if valid_archetypes then
+    for _, archetype in ipairs(opts.maven.archetypes) do
+      if type(archetype) ~= "table" then
+        valid_archetypes = false
+        break
+      end
+      for _, key in ipairs({ "group_id", "artifact_id", "version" }) do
+        if not non_empty_string(archetype[key]) then
+          valid_archetypes = false
+          break
+        end
+      end
+      if not valid_archetypes then
+        break
+      end
+      if archetype.name ~= nil and not non_empty_string(archetype.name) then
+        valid_archetypes = false
+        break
+      end
     end
+  end
+  if not valid_archetypes then
+    warn("maven.archetypes", "a non-empty list of archetype tables")
+    opts.maven.archetypes = vim.deepcopy(defaults.maven.archetypes)
   end
 
   for _, key in ipairs({ "command", "dsl", "test_framework", "default_project_type" }) do
@@ -193,6 +219,14 @@ local function validate(opts)
       warn("gradle." .. key, "a non-empty string")
       opts.gradle[key] = defaults.gradle[key]
     end
+  end
+  if not string_list(opts.gradle.dsls, false) then
+    warn("gradle.dsls", "a non-empty list")
+    opts.gradle.dsls = vim.deepcopy(defaults.gradle.dsls)
+  end
+  if not string_list(opts.gradle.languages, false) then
+    warn("gradle.languages", "a non-empty list")
+    opts.gradle.languages = vim.deepcopy(defaults.gradle.languages)
   end
   if
     not non_empty_string(opts.gradle.runner_java_version)
@@ -267,6 +301,16 @@ function M.setup(opts)
     opts = {}
   end
   options = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts)
+  if type(opts.maven) == "table" and opts.maven.archetypes ~= nil then
+    options.maven.archetypes = vim.deepcopy(opts.maven.archetypes)
+  end
+  if type(opts.gradle) == "table" then
+    for _, key in ipairs({ "dsls", "languages", "project_types" }) do
+      if opts.gradle[key] ~= nil then
+        options.gradle[key] = vim.deepcopy(opts.gradle[key])
+      end
+    end
+  end
   validate(options)
 end
 

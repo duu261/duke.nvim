@@ -1,5 +1,65 @@
 local M = {}
 
+local reserved_words = {}
+for _, word in ipairs({
+  "abstract",
+  "assert",
+  "boolean",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "char",
+  "class",
+  "const",
+  "continue",
+  "default",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "extends",
+  "final",
+  "finally",
+  "float",
+  "for",
+  "goto",
+  "if",
+  "implements",
+  "import",
+  "instanceof",
+  "int",
+  "interface",
+  "long",
+  "native",
+  "new",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "short",
+  "static",
+  "strictfp",
+  "super",
+  "switch",
+  "synchronized",
+  "this",
+  "throw",
+  "throws",
+  "transient",
+  "try",
+  "void",
+  "volatile",
+  "while",
+  "true",
+  "false",
+  "null",
+  "_",
+}) do
+  reserved_words[word] = true
+end
+
 local function sanitize_segment(segment)
   local clean = segment:gsub("[^%w_]", "")
   if clean:match("^%d") then
@@ -35,7 +95,7 @@ function M.validate_package(package_name)
     return "package name contains invalid segments"
   end
   for segment in package_name:gmatch("[^.]+") do
-    if not segment:match("^[%a_$][%w_$]*$") then
+    if not segment:match("^[%a_$][%w_$]*$") or reserved_words[segment] then
       return "package name contains invalid segments"
     end
   end
@@ -90,6 +150,12 @@ function M.create(opts, callback)
   local validation_error = M.validate(opts.group_id, opts.artifact_id)
   if validation_error then
     callback(validation_error)
+    return
+  end
+  local package_error =
+    M.validate_package(opts.package_name or M.package_name(opts.group_id, opts.artifact_id))
+  if package_error then
+    callback(package_error)
     return
   end
 

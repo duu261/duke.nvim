@@ -74,6 +74,31 @@ describe("Spring Initializr scaffolding", function()
     assert.equals("com.example.demoapi", spring.package_name("com.example", "demo-api"))
   end)
 
+  it("rejects reserved package segments before any request", function()
+    local cwd = vim.fn.tempname()
+    vim.fn.mkdir(cwd, "p")
+    temporary_directories[#temporary_directories + 1] = cwd
+    local callback_error
+    package.loaded["java_scaffold.process"] = {
+      run = function()
+        error("request must not start")
+      end,
+    }
+
+    spring.create({
+      cwd = cwd,
+      group_id = "com.example",
+      artifact_id = "demo",
+      package_name = "com.class.demo",
+      build = "maven",
+    }, function(err)
+      callback_error = err
+    end)
+
+    assert.matches("package", callback_error)
+    assert.same({}, vim.fn.glob(vim.fs.joinpath(cwd, ".java-scaffold-*"), false, true))
+  end)
+
   it("contains archive contents inside staging", function()
     local cwd = vim.fn.tempname()
     vim.fn.mkdir(cwd, "p")

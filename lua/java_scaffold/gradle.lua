@@ -7,6 +7,22 @@ function M.test_framework(java_version, configured)
   return tonumber(java_version) < 17 and "junit" or "junit-jupiter"
 end
 
+function M.project_type(language, project_type)
+  if
+    type(project_type) ~= "string"
+    or not vim.tbl_contains({ "java", "kotlin", "groovy" }, language)
+  then
+    return nil
+  end
+  local suffix = project_type:match("^java%-(application)$")
+    or project_type:match("^java%-(library)$")
+    or project_type:match("^java%-(gradle%-plugin)$")
+  if not suffix then
+    return nil
+  end
+  return language .. "-" .. suffix
+end
+
 function M.build_args(opts)
   return {
     "init",
@@ -43,6 +59,14 @@ function M.create(opts, callback)
   local validation_error = require("java_scaffold.maven").validate(opts.group_id, opts.artifact_id)
   if validation_error then
     callback(validation_error)
+    return
+  end
+  local package_error = require("java_scaffold.maven").validate_package(
+    opts.package_name
+      or require("java_scaffold.maven").package_name(opts.group_id, opts.artifact_id)
+  )
+  if package_error then
+    callback(package_error)
     return
   end
 
