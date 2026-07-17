@@ -77,23 +77,6 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   "duu261/duke.nvim",
   version = "*",
-  main = "duke",
-  cmd = {
-    "DukeNew",
-    "DukeMaven",
-    "DukeGradle",
-    "DukeSpring",
-    "DukeModule",
-    "DukeAdd",
-    "DukeUpgrade",
-    "DukeBootUpgrade",
-    "DukeOutdated",
-    "DukeRemove",
-    "DukeInfo",
-    "DukeClearCache",
-    "DukeLog",
-    "DukeHealth",
-  },
   opts = {},
 }
 ```
