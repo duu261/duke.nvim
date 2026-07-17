@@ -429,12 +429,16 @@ then choose [Done].
 :DukeBootUpgrade
     Find the nearest pom.xml, resolve its <parent>, and refuse if it is not
     org.springframework.boot:spring-boot-starter-parent, if there is no
-    <parent> at all, or if the version is property-backed. Otherwise list
-    Maven Central's full release history for spring-boot-starter-parent in
-    newest-first order; the current version is marked and selecting it is a
-    no-op. An explicit confirmation, defaulted to cancel, shows current and
-    target version before writing. The pom is re-read after the picker and
-    before the write. Only the parent <version> text changes.
+    <parent> at all, or if the version is property-backed. A project with a
+    custom corporate parent that manages Boot through
+    `spring-boot-dependencies` in `<dependencyManagement>` is detected and
+    its version is shown, but BOM version upgrades are deferred. Otherwise
+    list Maven Central's full release history for
+    spring-boot-starter-parent in newest-first order; the current version is
+    marked and selecting it is a no-op. An explicit confirmation, defaulted
+    to cancel, shows current and target version before writing. The pom is
+    re-read after the picker and before the write. Only the parent <version>
+    text changes.
 
                                           *:DukeOutdated*
 :DukeOutdated
