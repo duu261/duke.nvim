@@ -1,4 +1,6 @@
-*duke.txt*  Maven, Gradle, and Spring Boot scaffolding for Neovim
+*duke.txt*
+*Duke* *duke* *duke.nvim*
+Maven, Gradle, and Spring Boot scaffolding for Neovim
 
 ==============================================================================
 CONTENTS                                         *duke-contents*
@@ -540,9 +542,11 @@ because arbitrary searches and version lists are not cached.
 7. SCOPE AND TROUBLESHOOTING              *duke-troubleshooting*
 
 V1 owns Maven, Gradle, and Spring project creation, adding a module to an
-existing Maven multi-module reactor, plus root-level Maven dependency add,
-update, and removal workflows. It deliberately does not run applications,
-format code, execute tests, edit Gradle dependencies, or manage JDTLS.
+existing Maven multi-module reactor, root-level Maven dependency add, upgrade,
+outdated inspection, and removal, Maven Central version info lookup (see
+|:DukeInfo|), and Spring Boot parent version upgrade (see |:DukeBootUpgrade|).
+It deliberately does not run applications, format code, execute tests, edit
+Gradle dependencies, or manage JDTLS.
 
 For failures:
 
