@@ -1140,7 +1140,8 @@ function M.dependency_version_sources(lines, dependencies)
   return sources
 end
 
-function M.model(lines)
+function M.model(lines, opts)
+  opts = opts or {}
   local fields, fields_err = reactor_structure(lines)
   if not fields then
     return nil, fields_err
@@ -1149,13 +1150,19 @@ function M.model(lines)
   if not dependencies then
     return nil, dependencies_err
   end
-  local modules, modules_err = modules_structure(lines)
-  if not modules then
-    return nil, modules_err
-  end
-  local properties, properties_err = property_structure(lines)
-  if not properties then
-    return nil, properties_err
+  local modules = { module_entries = {} }
+  local properties = {}
+  if not opts.effective then
+    local modules_err
+    modules, modules_err = modules_structure(lines)
+    if not modules then
+      return nil, modules_err
+    end
+    local properties_err
+    properties, properties_err = property_structure(lines)
+    if not properties then
+      return nil, properties_err
+    end
   end
   local managed_dependencies, profile_ranges, ownership_err = ownership_structure(lines)
   if not managed_dependencies then

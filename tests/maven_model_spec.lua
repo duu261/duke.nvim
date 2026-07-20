@@ -40,6 +40,12 @@ describe("Maven workspace enrichment", function()
             "  <groupId>com.acme</groupId>  <!-- com.acme:app:1.0.0, line 2 -->",
             "  <artifactId>app</artifactId>",
             "  <version>1.0.0</version>",
+            "  <modules>",
+            "    <module>child</module>  <!-- com.acme:app:1.0.0, line 8 -->",
+            "  </modules>",
+            "  <properties>",
+            "    <slf4j.version>2.0.17</slf4j.version>  <!-- com.acme:app:1.0.0, line 12 -->",
+            "  </properties>",
             "</project>",
           }, output)
         else
@@ -93,21 +99,24 @@ describe("Maven workspace enrichment", function()
     assert.matches("^%-Doutput=", calls[1].args[7])
     assert.same({
       "-q",
+      "-N",
       "-f",
       "/workspace/app/pom.xml",
       "org.apache.maven.plugins:maven-dependency-plugin:3.11.0:tree",
       "-DoutputType=json",
       "-Dverbose",
-      calls[2].args[7],
+      calls[2].args[8],
     }, calls[2].args)
-    assert.matches("^%-DoutputFile=", calls[2].args[7])
+    assert.matches("^%-DoutputFile=", calls[2].args[8])
     assert.equals(5000, calls[1].opts.timeout)
     assert.equals(1, #results[1].result.modules[1].resolved.tree.children)
     assert.same({
       { source = "com.acme:app:1.0.0", line = 2, effective_line = 2 },
+      { source = "com.acme:app:1.0.0", line = 8, effective_line = 6 },
+      { source = "com.acme:app:1.0.0", line = 12, effective_line = 9 },
     }, results[1].result.modules[1].resolved.effective.sources)
     assert.is_nil(vim.uv.fs_stat(calls[1].args[7]:sub(10)))
-    assert.is_nil(vim.uv.fs_stat(calls[2].args[7]:sub(14)))
+    assert.is_nil(vim.uv.fs_stat(calls[2].args[8]:sub(14)))
   end)
 
   it("returns a partial snapshot after a non-zero goal", function()

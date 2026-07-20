@@ -132,7 +132,7 @@ local function parse_effective(path)
   if not lines then
     return nil, read_err
   end
-  local model, model_err = pom.model(lines)
+  local model, model_err = pom.model(lines, { effective = true })
   if not model then
     return nil, model_err
   end
@@ -188,10 +188,7 @@ local function run_goal(module, goal, output_argument, opts, callback)
   local started, start_err = pcall(function()
     local selected = build.maven(module.build_file, opts.maven_command or "mvn")
     path = output_path()
-    local args = { "-q" }
-    if goal == EFFECTIVE_GOAL then
-      args[#args + 1] = "-N"
-    end
+    local args = { "-q", "-N" }
     vim.list_extend(args, { "-f", module.build_file, goal })
     if goal == TREE_GOAL then
       args[#args + 1] = "-DoutputType=json"
