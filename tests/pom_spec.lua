@@ -1010,6 +1010,10 @@ describe("POM editing", function()
         { group_id = "com.acme", artifact_id = "root", version = "1.0.0" },
         model.coordinates
       )
+      assert.same(
+        { group_id = "com.acme", artifact_id = "parent", version = "1.0.0" },
+        model.parent
+      )
       assert.equals("pom", model.packaging)
       assert.same({ { path = "app", line = 13 } }, model.modules)
       assert.equals(2, #model.dependencies)

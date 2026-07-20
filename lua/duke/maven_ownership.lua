@@ -25,6 +25,13 @@ local function source_coordinate(source)
   end
 end
 
+local function parent_coordinate(module)
+  local parent = module.model and module.model.parent or {}
+  if type(parent.group_id) == "string" and type(parent.artifact_id) == "string" then
+    return parent.group_id .. ":" .. parent.artifact_id
+  end
+end
+
 local function in_profile(model, line)
   for _, range in ipairs(model.profile_ranges or {}) do
     if line >= range.start_line and line <= range.end_line then
@@ -208,6 +215,10 @@ local function resolve_node(module, node, modules_by_path, modules_by_coordinate
     if #candidates > 1 then
       return blocked(module, node, "unknown", "multiple local-parent candidates", source)
     end
+  end
+
+  if source_coordinate(source.source) == parent_coordinate(module) then
+    return blocked(module, node, "external_parent", "version owner is outside reactor", source)
   end
 
   local bom_coordinate = source_coordinate(source.source)

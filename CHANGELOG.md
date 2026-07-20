@@ -21,6 +21,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 ### Fixed
 
 - Maven effective-POM and dependency-tree inspection now run non-recursively per reactor module, preventing aggregated root output from being parsed as one mislabeled module.
+- Coordinate-form Maven origins from non-reactor parents are classified explicitly as read-only external ownership.
 - Multiline Maven failures now render safely in `:DukeLog`.
 
 ## 0.10.0 - 2026-07-20

@@ -1230,6 +1230,11 @@ function M.model(lines, opts)
       artifact_id = project.artifact_id,
       version = version,
     },
+    parent = next(parent) and {
+      group_id = parent.group_id,
+      artifact_id = parent.artifact_id,
+      version = parent.version,
+    } or nil,
     packaging = packaging,
     modules = modules.module_entries,
     dependencies = dependencies,

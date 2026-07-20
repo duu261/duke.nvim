@@ -208,4 +208,39 @@ describe("Maven version ownership", function()
     assert.equals("unknown", row.kind)
     assert.is_false(row.writable)
   end)
+
+  it("classifies coordinate-form origins from a non-reactor parent", function()
+    local app_model = {
+      coordinates = { group_id = "com.acme", artifact_id = "app", version = "1.0.0" },
+      parent = {
+        group_id = "com.external",
+        artifact_id = "company-parent",
+        version = "1.0.0",
+      },
+      dependencies = {},
+      dependency_management = {},
+      properties = {},
+      profile_ranges = {},
+    }
+    local effective = {
+      dependencies = {},
+      dependency_management = { managed("com.acme:library", "2.0.0", 60, 63) },
+      sources = {
+        { source = "com.external:company-parent:1.0.0", line = 12, effective_line = 63 },
+      },
+    }
+    local tree = {
+      coordinate = "com.acme:app",
+      children = { { coordinate = "com.acme:library", version = "2.0.0", children = {} } },
+    }
+
+    local row = ownership.resolve({
+      root = "/repo",
+      modules = { module("com.acme:app", "/repo/pom.xml", app_model, effective, tree) },
+    })["com.acme:app\0com.acme:library"]
+
+    assert.equals("external_parent", row.kind)
+    assert.matches("outside reactor", row.blocked_reason)
+    assert.is_false(row.writable)
+  end)
 end)
