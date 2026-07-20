@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.10.0 - 2026-07-20
+
 ### Added
 
 - `:DukeNew`, `:DukeMaven`, `:DukeGradle`, and `:DukeSpring` now share a native Creation Center with persistent editable state, configurable responsive, wide, or compact layouts, visible validation and discovery status, and an integrated Spring dependency view.
