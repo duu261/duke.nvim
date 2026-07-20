@@ -2,7 +2,7 @@
 
 > `cargo new` + `cargo add` for the JVM, inside Neovim.
 
-Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Maven dependencies, grow multi-module reactors, then open generated Java source or hand the project to another tool.
+Safely scaffold Maven, Gradle, and Spring Boot projects, understand existing Java workspaces, manage Maven dependencies, grow multi-module reactors, then open generated Java source or hand the project to another tool.
 
 > **Built with GPT-5.6 through Codex CLI for OpenAI Build Week.** [See how Codex and I collaborated](#built-with-codex).
 
@@ -18,6 +18,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 - [Configuration](#configuration)
 - [Java target and runner JVMs](#java-target-and-runner-jvms)
 - [Safety behavior](#safety-behavior)
+- [Project Center](#project-center)
 - [Spring metadata and Maven dependency lifecycle](#spring-metadata-and-maven-dependency-lifecycle)
 - [After creation](#after-creation)
 - [Lua API](#lua-api)
@@ -30,6 +31,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 ## ✨ Features
 
 - Guided Maven, Gradle, and Spring Boot wizards with destination, coordinates, package, Java, workflow-specific choices, and final review.
+- Native Project Center for Maven reactors and Gradle workspaces, with modules, direct dependencies, Spring configuration files, diagnostics, navigation, and explicit wrapper-backed refresh.
 - Maven quickstart and web application archetypes with optional Maven Wrapper generation.
 - Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
 - Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
@@ -41,12 +43,13 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 - `:DukeBootUpgrade` detects Spring Boot versions from parent POMs and from `spring-boot-dependencies` BOM imports in `<dependencyManagement>`, with BOM upgrades deferred.
 - Version pickers show Maven Central release dates and name the selected dependency in follow-up prompts.
 - Add a module to an existing Maven multi-module reactor with parent-first, rollback-safe promotion.
+- Session-scoped multi-dependency Maven upgrade plans with exact before/after preview, shared-property impact, stale-source rejection, and one transactional apply.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits that stay one-line reviewable diffs, and offline metadata fallback.
 - Telescope or native `vim.ui` pickers, including visible multi-select counts and Java LTS markers.
 - Generated Java entry opening, `User DukeProjectCreated`, and optional post-create handoff.
 
-Focused scope: project creation and Maven dependency lifecycle management. Duke complements Java language tooling such as `nvim-jdtls` and `nvim-java`; it does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
+Focused scope: project creation, Java build-workspace intelligence, and safe Maven dependency lifecycle management. Duke complements Java language tooling such as [nvim-jdtls](https://github.com/mfussenegger/nvim-jdtls) and [nvim-java](https://github.com/nvim-java/nvim-java); it does not run, format, or test projects, edit Gradle dependencies, edit Spring configuration values, or manage JDTLS.
 
 ## Built with Codex
 
@@ -113,17 +116,20 @@ Example:
 
 Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Projects/demo`. Existing targets are never overwritten.
 
+Inside an existing Maven or Gradle project, run `:Duke` instead. Project Center opens immediately from local files without running the build. Press `r` only when you want wrapper-backed dependency resolution.
+
 ## Judge testing path
 
 No source build is required. Install the latest tagged release with the lazy.nvim snippet above. The shortest interactive path needs Neovim 0.11+, `java`, `mvn`, `curl`, and network access.
 
 1. Run `:DukeHealth` and confirm Java, Maven, and curl are available.
-2. Run `:DukeMaven` from a disposable parent directory. Choose the Maven quickstart archetype, enter temporary coordinates such as `com.example:duke-demo`, review the destination, and confirm.
-3. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm.
-4. Inspect the resulting POM. The plugin adds one root dependency block without reformatting unrelated content.
-5. Run `:DukeInfo com.google.guava:guava` to inspect current Maven Central version information without changing the project.
-6. Run `:DukeTree` to inspect the resolved classpath, then `:DukeWhy com.google.guava:failureaccess` to show why Guava's transitive dependency is present.
-7. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
+2. Open an existing Maven or Gradle project and run `:Duke`. Confirm modules and Spring configuration files appear immediately. Press `r` to opt into wrapper-backed resolution; opening the panel alone runs no build tool.
+3. Run `:DukeMaven` from a disposable parent directory. Choose the Maven quickstart archetype, enter temporary coordinates such as `com.example:duke-demo`, review the destination, and confirm.
+4. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm.
+5. Inspect the resulting POM. The plugin adds one root dependency block without reformatting unrelated content.
+6. Run `:DukeInfo com.google.guava:guava` to inspect current Maven Central version information without changing the project.
+7. Run `:DukeTree` to inspect the resolved classpath, then `:DukeWhy com.google.guava:failureaccess` to show why Guava's transitive dependency is present.
+8. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
 
 For repository verification instead of the interactive path, clone the repository and run `make format`, `make lint`, and `make test`. GitHub CI runs lint plus tests against the exact Neovim 0.11 floor, stable, and nightly.
 
@@ -131,7 +137,7 @@ For repository verification instead of the interactive path, clone the repositor
 
 | Command | Action |
 | --- | --- |
-| `:Duke` | Show grouped command help |
+| `:Duke` | Open Project Center inside Maven or Gradle workspaces; show command help elsewhere |
 | `:DukeNew` | Choose Maven, Gradle, or Spring Boot, then run its wizard |
 | `:DukeMaven` | Create Maven quickstart or web application project |
 | `:DukeGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
@@ -248,6 +254,17 @@ Discovery resolves duplicate JDK paths, caps each version probe at one second, a
 - Only the root project dependency block is edited. Dependency management, plugins, and profiles remain untouched.
 - Compact one-line or self-closing project, dependencies, or dependency XML is rejected instead of guessed.
 - POM writes skip write autocommands, so a format-on-save chain cannot reformat the file around an edit. A dependency add or version bump stays a one-line diff you can actually review. Manual `:w` still formats as configured.
+- Multi-upgrade plans live only in the current Neovim session. Apply accepts an opaque random ID, re-reads every source line, ignores caller-mutated preview data, expires before writing, writes once, and emits one build-change event.
+
+## Project Center
+
+Run `:Duke` from a Maven or Gradle workspace to open the native sidebar. Duke discovers the nearest build root, literal Maven reactor modules, active module, direct Maven declarations, Gradle settings/build/catalog files, wrappers, and Spring `application[-profile].properties`, `.yml`, and `.yaml` filenames. It returns paths, profiles, formats, and scopes only; configuration values are never read into the model or rendered.
+
+Project Center opens from local files only. `r` explicitly permits read-only build-tool reports. Maven uses version-pinned `help:effective-pom` and `dependency:tree` goals through the project wrapper when available. Resolved direct dependencies gain selected versions, including parent-managed versions, plus node, transitive, conflict, drift, and duplicate counts. Gradle uses plain-console `--version`, `projects`, and dependency reports. Failures preserve the local snapshot and appear as partial diagnostics instead of fabricated resolved data.
+
+Keys: `<CR>` opens a module build file or Spring configuration, `r` resolves, `u` plans upgrades for the active Maven module, `/` searches nodes through Telescope or `vim.ui`, `?` shows help, and `q` closes. Opening and refreshing preserve the code window, current buffer, working directory, and unsaved state.
+
+Maven analysis reports direct and transitive paths, requested and selected versions, duplicate declarations, cross-module drift, proven conflicts when Maven emits them, shared version-property consumers, and unknown ownership. Upgrade planning may edit a literal root dependency version or a unique direct-root property used only by root dependency versions. Plugin, profile, dependency-management, chained, compact, and otherwise ambiguous property ownership is refused.
 
 ## Spring metadata and Maven dependency lifecycle
 
@@ -265,9 +282,9 @@ Dependency insertion exposes only entries representable by one normal Maven `<de
 
 For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `groupId:artifactId` plus latest version. Selecting one artifact opens a newest-first version picker with release dates when available, defaulted to that latest version, then a scope picker with `compile` as the default and `test`, `provided`, or `runtime` as alternatives. Both prompts include the dependency coordinate. Compile scope emits no `<scope>` element. Multi-select keeps each artifact's latest version and compile scope without another prompt. A final confirmation, defaulted to cancel, lists every dependency before the POM write. Success reports coordinates actually added. Malformed result rows are skipped without discarding valid neighbors, and `pom` artifacts remain excluded. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
 
-`:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list with release dates when available. The latest version is marked; selecting the current version is a no-op. A final current-to-target confirmation defaults to cancel before writing. Managed dependencies whose version comes from a parent or BOM are shown with their resolved version (resolved by `mvn dependency:list`) and marked as managed; selecting one notifies about `:DukeBootUpgrade` instead of opening a version picker. Property-backed versions such as `${library.version}` are listed but rejected with the property name because property editing is outside plugin scope. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
+`:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list with release dates when available. The latest version is marked; selecting the current version is a no-op. A final current-to-target confirmation defaults to cancel before writing. Managed dependencies whose version comes from a parent or BOM are shown with their resolved version (resolved by `mvn dependency:list`) and marked as managed; selecting one notifies about `:DukeBootUpgrade` instead of opening a version picker. This single-dependency command rejects property-backed versions such as `${library.version}`; use Project Center upgrade planning when a direct-root dependency property has safe, unambiguous ownership. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
 
-`:DukeBootUpgrade` upgrades a Spring Boot `pom.xml`'s `<parent>` `<version>` from Maven Central's full release history for `org.springframework.boot:spring-boot-starter-parent`, so patch bumps on an old line (2.7.x to 2.7.18) stay reachable even after Initializr stops generating that line. A project with a corporate parent that manages Boot through `spring-boot-dependencies` in `<dependencyManagement>` is detected and its version is shown, but BOM version upgrades are deferred. A non-Boot project, or a pom with no Boot version at all, is refused. A property-backed parent version, for example `${boot.version}`, is refused with the property name; property editing is outside plugin scope. Picking the version already in the pom is a no-op. An explicit confirmation, defaulted to cancel, shows the current and target version before writing; declining or cancelling the version picker leaves `pom.xml` byte-identical. The pom is re-read after the picker and before the write, so an edit made while the picker was open is caught rather than overwritten. Only the parent `<version>` text changes; no Java version, property, or dependency edit accompanies the bump.
+`:DukeBootUpgrade` upgrades a Spring Boot `pom.xml`'s `<parent>` `<version>` from Maven Central's full release history for `org.springframework.boot:spring-boot-starter-parent`, so patch bumps on an old line (2.7.x to 2.7.18) stay reachable even after Initializr stops generating that line. A project with a corporate parent that manages Boot through `spring-boot-dependencies` in `<dependencyManagement>` is detected and its version is shown, but BOM version upgrades are deferred. A non-Boot project, or a pom with no Boot version at all, is refused. A property-backed parent version, for example `${boot.version}`, is refused because this command edits only the literal parent version. Picking the version already in the pom is a no-op. An explicit confirmation, defaulted to cancel, shows the current and target version before writing; declining or cancelling the version picker leaves `pom.xml` byte-identical. The pom is re-read after the picker and before the write, so an edit made while the picker was open is caught rather than overwritten. Only the parent `<version>` text changes; no Java version, property, or dependency edit accompanies the bump.
 
 `:DukeOutdated` checks root dependencies with literal explicit or managed versions sequentially against Maven Central and lists `current -> latest` rows. Managed versions are resolved by `mvn dependency:list` and marked with their managing parent when available. If `mvn` is missing or the project fails to resolve, managed dependencies degrade to today's skipped-with-count behavior and explicit-version rows still work. Property-backed versions are skipped with counts. Any lookup error, including a timeout or HTTP 429, stops further lookups but keeps gathered rows and reports how many dependencies were not checked. Selecting a managed row notifies about `:DukeBootUpgrade` and writes nothing. Selecting an explicit-version row enters the same single-dependency version picker and stale-file-safe write path as `:DukeUpgrade`; canceling leaves the POM untouched.
 
@@ -322,7 +339,7 @@ handoff = {
 
 ## Lua API
 
-Programmatic calls never open a wizard or picker, change directory, edit a buffer, or invoke the configured handoff. Results arrive once through a callback on the Neovim main loop:
+Programmatic calls never open a wizard or picker, change directory, or invoke the configured handoff. Inspection and planning are read-only; mutation calls may update the explicit POM path or its loaded buffer. Results arrive once through a callback on the Neovim main loop:
 
 ```lua
 require("duke").create("maven", {
@@ -355,6 +372,34 @@ end)
 
 `create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. `upgrade_parent()` upgrades the Spring Boot parent version without UI, skipping the confirmation prompt since the API call itself is the confirmation; it refuses a non-Boot or property-backed parent the same way `:DukeBootUpgrade` does. `add_module()` adds a module to an existing Maven reactor without UI; unlike the command, `reactor_dir` is required with no current-working-directory fallback. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
 
+Workspace inspection uses an error-first callback. Local inspection runs no build tool; `resolve = true` explicitly permits wrapper-backed Maven or Gradle reports:
+
+```lua
+require("duke").inspect({ path = vim.fn.getcwd(), resolve = false }, function(err, snapshot)
+  if err then
+    return vim.notify(err, vim.log.levels.ERROR)
+  end
+  print(snapshot.kind, snapshot.root, snapshot.state)
+end)
+```
+
+Multi-upgrade plans use the same callback form. A missing `new_version` resolves the latest Maven Central version. Only the returned opaque session ID authorizes apply; display fields are untrusted copies:
+
+```lua
+require("duke").plan_upgrades({
+  pom_path = "/path/to/project/pom.xml",
+  changes = {
+    { coordinate = "org.slf4j:slf4j-api", new_version = "2.0.17" },
+  },
+}, function(err, plan)
+  if not err then
+    require("duke").apply_plan(plan, function(apply_err, result)
+      print(apply_err or (result.saved and "saved" or "buffer updated"))
+    end)
+  end
+end)
+```
+
 `require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("duke").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
@@ -382,9 +427,9 @@ Active Java wins when eligible and `prefer_active` is not `false`; otherwise the
 
 ## Scope and limits
 
-V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, root-level Maven dependency add, upgrade, outdated inspection, and removal, resolved Maven tree and why-path inspection, Maven Central version info lookup, and Spring Boot parent version upgrade.
+V1 owns Maven, Gradle, and Spring project creation, local Java workspace discovery, explicit read-only Maven and Gradle model refresh, Spring configuration-file navigation, adding a module to an existing Maven multi-module reactor, root-level Maven dependency add, upgrade, outdated inspection, removal and safe multi-upgrade planning, resolved Maven tree and why-path inspection, Maven Central version info lookup, and Spring Boot parent version upgrade.
 
-The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
+The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, edit Spring configuration values, or manage JDTLS. Existing tools remain responsible for those jobs.
 
 ## ❓ FAQ
 
@@ -402,7 +447,7 @@ Only dependencies representable as a single `<dependency>` block appear. Entries
 
 **What does `:DukeOutdated` check and what does it skip?**
 
-The command checks root `pom.xml` dependencies with literal versions (explicit or resolved from a parent/BOM) against Maven Central. Property-backed versions like `${library.version}` are reported but skipped because property editing is outside plugin scope. Transitive dependencies are never inspected. Managed dependencies without a resolvable version degrade to a skipped-with-count fallback.
+The command checks root `pom.xml` dependencies with literal versions (explicit or resolved from a parent/BOM) against Maven Central. Property-backed versions like `${library.version}` are reported but skipped by this command; Project Center upgrade planning handles only safe direct-root dependency properties. Transitive dependencies are never inspected. Managed dependencies without a resolvable version degrade to a skipped-with-count fallback.
 
 **Can I use this with a multi-module project?**
 

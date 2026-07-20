@@ -6,12 +6,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
+- `:Duke` now opens a native Project Center inside Maven and Gradle workspaces, showing local modules, direct dependencies, Spring configuration filenames, diagnostics, and navigation without running a build tool.
+- Explicit Project Center refresh adds wrapper-backed, read-only Maven effective/dependency analysis and Gradle project/dependency reports, with selected direct versions, analysis counts, and partial states instead of fabricated resolved data.
+- `duke.inspect(opts, callback)` exposes local or explicitly resolved workspace snapshots to scripts and integrations.
+- `duke.plan_upgrades(opts, callback)` and `duke.apply_plan(plan, callback)` provide opaque session-scoped Maven multi-upgrade plans with exact preview, shared-property impact, complete stale-source checks, one write, and one build-change event.
 - `:DukeTree` renders Maven's resolved dependency tree and selected versions in a read-only scratch buffer, preserving any annotations Maven emits.
 - `:DukeWhy [groupId:artifactId]` shows the ancestor path for a direct or transitive dependency. Without an argument, root dependencies seed the picker and a typed-coordinate path remains available.
 - Successful dependency and module mutations emit `User DukeBuildChanged` with build root, build file, operation, and save-state data for optional tool integration.
 
 ### Changed
 
+- Product scope now includes read-only Maven/Gradle workspace intelligence and Spring configuration-file navigation while keeping JDTLS, app running, formatting, tests, Gradle dependency editing, and Spring value editing external.
 - Existing-project Maven resolution and dependency insight prefer an executable project Maven Wrapper, with `maven.command` as fallback.
 
 ## 0.9.0 - 2026-07-20

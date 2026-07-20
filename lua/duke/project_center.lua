@@ -28,6 +28,17 @@ local function module_by_id(snapshot, id)
   end
 end
 
+local function resolved_dependency_versions(snapshot)
+  local versions = {}
+  local analysis = snapshot and snapshot.analysis
+  for _, dependency in ipairs((analysis and analysis.dependencies) or {}) do
+    if dependency.direct then
+      versions[dependency.module_id .. "\0" .. dependency.coordinate] = dependency.version
+    end
+  end
+  return versions
+end
+
 local function render(snapshot, status)
   if not valid_buffer() then
     return
@@ -48,6 +59,7 @@ local function render(snapshot, status)
   end
 
   if snapshot then
+    local resolved_versions = resolved_dependency_versions(snapshot)
     heading("Modules", #(snapshot.modules or {}))
     for _, module in ipairs(snapshot.modules or {}) do
       node(module.id, { kind = "module", label = module.id, path = module.build_file, line = 1 })
@@ -56,7 +68,15 @@ local function render(snapshot, status)
     heading("Dependencies", #(snapshot.dependencies or {}))
     for _, dependency in ipairs(snapshot.dependencies or {}) do
       local module = module_by_id(snapshot, dependency.module_id)
-      local suffix = dependency.version and ("  " .. dependency.version) or ""
+      local resolved = resolved_versions[dependency.module_id .. "\0" .. dependency.coordinate]
+      local suffix = ""
+      if resolved and not dependency.version then
+        suffix = "  " .. resolved .. " (managed)"
+      elseif resolved and resolved ~= dependency.version then
+        suffix = "  " .. dependency.version .. " -> " .. resolved
+      elseif dependency.version then
+        suffix = "  " .. dependency.version
+      end
       node(dependency.coordinate .. suffix, {
         kind = "dependency",
         label = dependency.coordinate,
@@ -65,6 +85,22 @@ local function render(snapshot, status)
       })
     end
     lines[#lines + 1] = ""
+    if snapshot.analysis then
+      local dependencies = snapshot.analysis.dependencies or {}
+      local findings = snapshot.analysis.findings or {}
+      local transitive = 0
+      for _, dependency in ipairs(dependencies) do
+        if not dependency.direct then
+          transitive = transitive + 1
+        end
+      end
+      heading("Resolved nodes", #dependencies)
+      node("Transitive dependencies  " .. transitive, { kind = "analysis" })
+      node("Conflicts  " .. #(findings.conflicts or {}), { kind = "analysis" })
+      node("Version drift  " .. #(findings.drift or {}), { kind = "analysis" })
+      node("Duplicate declarations  " .. #(findings.duplicates or {}), { kind = "analysis" })
+      lines[#lines + 1] = ""
+    end
     heading("Spring configuration", #(snapshot.configuration or {}))
     for _, file in ipairs(snapshot.configuration or {}) do
       local profile = file.profile and (" [" .. file.profile .. "]") or ""
@@ -153,6 +189,7 @@ local function show_help()
     "",
     "<CR>  Open module build file or Spring configuration",
     "r     Resolve workspace through Maven or Gradle wrapper",
+    "u     Plan upgrades for the active Maven module",
     "/     Search visible project nodes",
     "q     Close Project Center",
   })

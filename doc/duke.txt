@@ -17,7 +17,8 @@ CONTENTS                                         *duke-contents*
 1. INTRODUCTION                              *duke-introduction*
 
 duke.nvim safely creates Maven, Gradle, and Spring Boot projects in
-Neovim. It adds, updates, and removes root Maven dependencies,
+Neovim. It understands existing Maven reactors and Gradle workspaces, and
+adds, updates, and removes root Maven dependencies,
 opens generated Java source for an existing Java filetype or JDTLS setup, and
 can pass a completed project to an optional handoff command.
 
@@ -32,7 +33,8 @@ handoff tools are optional.
 
 Generators build inside private staging directories, validate expected build
 files, and never overwrite an existing target. The plugin does not run,
-format, or test projects, edit Gradle dependencies, or manage JDTLS.
+format, or test projects, edit Gradle dependencies or Spring configuration
+values, or manage JDTLS.
 Spring requests require HTTPS. Archives are inspected before extraction;
 absolute paths, parent traversal, symlinks, and hardlinks are rejected.
 
@@ -266,10 +268,10 @@ outdated({opts}, {callback})             *duke.outdated()*
     Failure before the first completed lookup returns ok = false. Ambiguous
     duplicate coordinates are rejected before lookup.
 
-    All programmatic functions require a callback. Unknown option keys
-    are ignored. Wrong types, missing required fields, unsupported enum
-    values, and unknown project kinds return structured callback errors. Every
-    result callback runs once on the Neovim main loop.
+    All programmatic functions require a callback. The legacy create and
+    single-operation APIs above return structured result tables. inspect(),
+    plan_upgrades(), and apply_plan() below use callback(err, result). Every
+    callback runs once on the Neovim main loop.
 
 add_module({opts}, {callback})           *duke.add_module()*
     Add a module to an existing Maven reactor without UI. opts requires
@@ -289,6 +291,55 @@ add_module({opts}, {callback})           *duke.add_module()*
     core restored the parent pom.xml after a failed save or promotion. It
     stays false both when nothing was written and when the restore attempt
     itself failed; the latter appends detail to error instead.
+
+inspect([{opts}], {callback})                 *duke.inspect()*
+    Inspect a Java build workspace without UI. opts.path defaults to the
+    current buffer path, then cwd. resolve defaults to false and performs
+    local file discovery only. resolve = true explicitly permits read-only
+    Maven or Gradle wrapper reports. The error-first callback receives:
+>
+      callback(err, {
+        root = "/absolute/workspace",
+        kind = "maven",
+        state = "local", -- or "resolved" / "partial"
+        active_module = "com.example:app",
+        modules = {},
+        dependencies = {},
+        configuration = {},
+        environment = {},
+        diagnostics = {},
+        analysis = nil,
+      })
+<
+    Local inspection never runs a build tool. Resolved Maven analysis records
+    dependency paths, selected versions, duplicates, cross-module drift,
+    conflicts when Maven emits them, and unknown ownership. Gradle refresh
+    records its version, project report, and recognized runtime and test
+    dependency lines. Partial output stays explicit.
+
+plan_upgrades({opts}, {callback})       *duke.plan_upgrades()*
+    Build a session-scoped Maven upgrade plan. opts requires pom_path and a
+    non-empty changes list. Each change has groupId:artifactId in coordinate
+    and may provide new_version. Without new_version, Duke resolves Maven
+    Central's latest version. The error-first callback receives an opaque ID,
+    exact before/after preview, display-only changes, affected coordinates,
+    shared property impact, and a display fingerprint.
+
+    A plan may update literal root dependency versions or unique direct-root
+    properties used only by root dependency versions. Plugin, profile,
+    dependency-management, chained, compact, and ambiguous property ownership
+    is rejected.
+
+apply_plan({plan}, {callback})                *duke.apply_plan()*
+    Apply a plan returned by plan_upgrades(). Only plan.id selects the private
+    canonical change. Caller changes to pom_path, preview, coordinates, or
+    other display fields never control a write. The plan expires before I/O;
+    unknown, reused, expired, or source-stale plans fail. Success writes once,
+    emits User DukeBuildChanged once, and reports accurate saved state.
+
+project_center([{opts}])                    *duke.project_center()*
+    Toggle Project Center for opts.path or current context. This is the same
+    interactive view opened by |:Duke| inside a build workspace.
 
 add_dependency()                     *duke.add_dependency()*
     Find the nearest pom.xml and start the same dependency workflow as
@@ -353,8 +404,8 @@ Successful dependency and module mutations emit User DukeBuildChanged. Event
 data contains kind, root, build_file, operation, and saved. Dependency events
 also contain coordinates; module creation contains module_dir. No-op and
 failed mutations emit nothing. operation is add_dependency,
-upgrade_dependency, remove_dependency, upgrade_parent, or add_module. Example
-optional nvim-jdtls bridge:
+upgrade_dependency, remove_dependency, upgrade_parent, add_module, or
+plan_upgrades. Example optional nvim-jdtls bridge:
 >
   vim.api.nvim_create_autocmd("User", {
     pattern = "DukeBuildChanged",
@@ -385,7 +436,27 @@ then choose [Done - N selected]. Both paths show the current selection count.
 
                                                          *:Duke*
 :Duke
-    Open grouped command help. Press q to close the scratch window.
+    Open Project Center when the current buffer or cwd belongs to a Maven or
+    Gradle workspace. Otherwise open grouped command help.
+
+    Project Center renders local modules, direct dependencies, Spring
+    configuration filenames, and diagnostics without running a build tool.
+    After explicit Maven resolution, direct dependencies show selected
+    versions, including parent-managed versions. The sidebar also summarizes
+    resolved nodes, transitive dependencies, conflicts, version drift, and
+    duplicate declarations.
+    Keys are:
+
+      <CR>  Open module build file or Spring configuration.
+      r     Explicitly resolve through Maven or Gradle wrapper reports.
+      u     Plan upgrades for the active Maven module.
+      /     Search visible nodes through Telescope or vim.ui.
+      ?     Show Project Center help.
+      q     Close.
+
+    Spring discovery returns paths, filename-proven profiles, formats, and
+    scopes only. Configuration values are never returned or rendered. The
+    sidebar preserves current code window, buffer, cwd, and unsaved state.
 
                                                       *:DukeNew*
 :DukeNew
@@ -598,15 +669,21 @@ because arbitrary searches and version lists are not cached.
 ==============================================================================
 7. SCOPE AND TROUBLESHOOTING              *duke-troubleshooting*
 
-V1 owns Maven, Gradle, and Spring project creation, adding a module to an
-existing Maven multi-module reactor, root-level Maven dependency add, upgrade,
-outdated inspection, and removal, resolved dependency tree and why-path
-inspection (see |:DukeTree| and |:DukeWhy|), Maven Central version info lookup
-(see |:DukeInfo|), and Spring Boot parent version upgrade (see
-|:DukeBootUpgrade|).
+V1 owns Maven, Gradle, and Spring project creation, local Java workspace
+discovery, explicit read-only Maven and Gradle model refresh, Spring
+configuration-file navigation, adding a module to an existing Maven
+multi-module reactor, root-level Maven dependency add, upgrade, safe
+multi-upgrade planning, outdated inspection, and removal, resolved dependency
+tree and why-path inspection (see |:DukeTree| and |:DukeWhy|), Maven Central
+version info lookup (see |:DukeInfo|), and Spring Boot parent version upgrade
+(see |:DukeBootUpgrade|).
 It deliberately does not run applications, format code, execute tests, edit
-Gradle dependencies, or manage JDTLS. It complements nvim-jdtls, nvim-java,
-and other Java language tooling by owning project and dependency workflow.
+Gradle dependencies, edit Spring configuration values, or manage JDTLS. It
+complements nvim-jdtls, nvim-java, and other Java language tooling by owning
+project and dependency workflow. See:
+
+  https://github.com/mfussenegger/nvim-jdtls
+  https://github.com/nvim-java/nvim-java
 
 For failures:
 
