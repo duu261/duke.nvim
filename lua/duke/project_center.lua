@@ -388,11 +388,32 @@ local function render(snapshot, status)
         })
         local owner = finding.ownership
         if owner then
-          local location = owner.pom_label or "unknown POM"
-          if owner.line then
-            location = location .. ":" .. owner.line
+          if type(owner.owners) == "table" then
+            lines[#lines + 1] = string.format(
+              "    owner %s  %d POMs",
+              tostring(owner.kind or "reactor_alignment"),
+              #owner.owners
+            )
+            for _, item in ipairs(owner.owners) do
+              local location = item.pom_label or "unknown POM"
+              if item.line then
+                location = location .. ":" .. item.line
+              end
+              lines[#lines + 1] = "      owner "
+                .. tostring(item.kind or "unknown")
+                .. "  "
+                .. location
+            end
+          else
+            local location = owner.pom_label or "unknown POM"
+            if owner.line then
+              location = location .. ":" .. owner.line
+            end
+            lines[#lines + 1] = "    owner "
+              .. tostring(owner.kind or "unknown")
+              .. "  "
+              .. location
           end
-          lines[#lines + 1] = "    owner " .. tostring(owner.kind or "unknown") .. "  " .. location
         end
         if not finding.repairable then
           lines[#lines + 1] = "    blocked "

@@ -6,7 +6,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
-- `:DukeDoctor[!]` adds explicit Maven reactor diagnosis, effective ownership, conflict and drift findings, staged version or exclusion repairs, redacted multi-POM previews, transactional apply, and before/after receipt refresh.
+- `:DukeDoctor[!]` adds explicit Maven reactor diagnosis, effective ownership, conflict and drift findings, staged version, exclusion, or proven cross-module alignment repairs, redacted multi-POM previews, transactional apply, and before/after receipt refresh.
 - `duke.diagnose_workspace()`, `duke.plan_repairs()`, and `duke.apply_reactor_plan()` expose the same opaque, session-scoped workflow without UI.
 - Project Center now exposes resolved Maven ownership, consumers, findings, paths, exact declaration navigation, and resolved Gradle dependency rows in read-only detail buffers.
 - Contextual `a`, `u`, `x`, `p`, and `g` actions reuse Duke's existing Maven workflows for the selected module or dependency.
@@ -20,7 +20,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Fixed
 
-- Maven effective-POM inspection now runs non-recursively per reactor module, preventing an aggregated root `<projects>` document from degrading otherwise valid workspace resolution to partial state.
+- Maven effective-POM and dependency-tree inspection now run non-recursively per reactor module, preventing aggregated root output from being parsed as one mislabeled module.
+- Multiline Maven failures now render safely in `:DukeLog`.
 
 ## 0.10.0 - 2026-07-20
 

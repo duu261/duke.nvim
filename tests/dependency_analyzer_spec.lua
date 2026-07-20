@@ -120,6 +120,22 @@ describe("Dependency analyzer", function()
         writable = false,
         blocked_reason = "version owner is outside reactor",
       },
+      ["com.acme:app\0com.acme:drift"] = {
+        kind = "dependency",
+        coordinate = "com.acme:drift",
+        requested_version = "1.0.0",
+        pom_path = "/repo/app/pom.xml",
+        line = 20,
+        writable = true,
+      },
+      ["com.acme:service\0com.acme:drift"] = {
+        kind = "dependency",
+        coordinate = "com.acme:drift",
+        requested_version = "2.0.0",
+        pom_path = "/repo/service/pom.xml",
+        line = 20,
+        writable = true,
+      },
     }
 
     local findings = analyzer.repairable(analysis, ownership_rows, {
@@ -140,6 +156,9 @@ describe("Dependency analyzer", function()
     assert.same({ "com.acme:app", "com.acme:service" }, conflict.consumers)
     assert.equals("warning", conflict.severity)
 
+    assert.is_true(by_kind.version_drift.repairable)
+    assert.equals("reactor_alignment", by_kind.version_drift.ownership.kind)
+    assert.equals(2, #by_kind.version_drift.ownership.owners)
     assert.is_true(by_kind.mediated_version.repairable)
     assert.is_false(by_kind.duplicate_declaration.repairable)
     assert.matches("duplicate", by_kind.duplicate_declaration.blocked_reason)

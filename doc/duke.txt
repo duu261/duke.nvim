@@ -355,6 +355,8 @@ plan_repairs({opts}, {callback})            *duke.plan_repairs()*
 
     The opaque one-shot result contains sorted relative POM labels, changed
     values, shared consumers, file/change counts, and modified-buffer count.
+    Cross-module drift applies one explicit version to every proven local
+    owner; its preview lists each affected POM.
     Display fields never select write targets. Unknown, expired, duplicate,
     blocked, ambiguous, profile, external-parent, unsafe-property, compact, or
     stale repairs are rejected.
@@ -545,8 +547,9 @@ then choose [Done - N selected]. Both paths show the current selection count.
 
     Project Center shows active profile IDs. Findings show requested and
     selected versions, paths, relative owner labels and lines, shared
-    consumers, and explicit blocked reasons. Repair plans remain session-scoped
-    and one-shot. Public previews omit canonical
+    consumers, and explicit blocked reasons. Proven cross-module drift lists
+    every local owner for one explicit alignment version. Repair plans remain
+    session-scoped and one-shot. Public previews omit canonical
     paths and complete POM contents. Apply performs a multi-POM transaction;
     press R afterward to compare selected finding IDs before and after.
 

@@ -164,8 +164,64 @@ local function owner_for(rows, module_id, coordinate)
   end
 end
 
+local function alignment_owner(rows, coordinate)
+  local owners = {}
+  local identities = {}
+  local consumers = {}
+  local consumer_seen = {}
+  local blocked_reason
+  for _, row in pairs(rows or {}) do
+    if row.coordinate == coordinate then
+      if row.writable ~= true then
+        blocked_reason = blocked_reason or row.blocked_reason or "alignment owner is not writable"
+      elseif type(row.pom_path) == "string" then
+        local identity = table.concat({
+          row.kind or "",
+          row.pom_path,
+          row.line or "",
+          row.property or "",
+        }, "\0")
+        if not identities[identity] then
+          identities[identity] = true
+          owners[#owners + 1] = vim.deepcopy(row)
+          for _, consumer in ipairs(row.consumers or {}) do
+            if not consumer_seen[consumer] then
+              consumer_seen[consumer] = true
+              consumers[#consumers + 1] = consumer
+            end
+          end
+        end
+      else
+        blocked_reason = blocked_reason or "alignment owner has no local POM"
+      end
+    end
+  end
+  table.sort(owners, function(left, right)
+    if left.pom_path ~= right.pom_path then
+      return left.pom_path < right.pom_path
+    end
+    return (left.line or 0) < (right.line or 0)
+  end)
+  table.sort(consumers)
+  if blocked_reason or #owners < 2 then
+    return {
+      kind = "reactor_alignment",
+      owners = owners,
+      consumers = consumers,
+      writable = false,
+      blocked_reason = blocked_reason or "alignment requires multiple proven local owners",
+    }
+  end
+  return {
+    kind = "reactor_alignment",
+    owners = owners,
+    consumers = consumers,
+    writable = true,
+  }
+end
+
 local function decorate(finding, rows, analysis)
-  local owner = owner_for(rows, finding.module_id, finding.coordinate)
+  local owner = finding.ownership or owner_for(rows, finding.module_id, finding.coordinate)
   finding.ownership = owner and vim.deepcopy(owner) or nil
   finding.paths = finding.paths
     or vim.deepcopy(
@@ -210,6 +266,7 @@ function M.repairable(analysis, ownership_rows, usage)
       coordinate = drift.coordinate,
       module_id = drift.module_id,
       requested_versions = unique_sorted(drift.versions),
+      ownership = alignment_owner(ownership_rows, drift.coordinate),
     }, ownership_rows, analysis)
   end
   for _, duplicate in ipairs(grouped.duplicates or {}) do

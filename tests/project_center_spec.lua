@@ -652,6 +652,22 @@ describe("Java Project Center", function()
               blocked_reason = "external parent outside reactor",
               ownership = { kind = "external_parent", writable = false },
             },
+            {
+              id = "version_drift:com.acme:drift",
+              kind = "version_drift",
+              severity = "warning",
+              coordinate = "com.acme:drift",
+              requested_versions = { "1.0.0", "2.0.0" },
+              repairable = true,
+              ownership = {
+                kind = "reactor_alignment",
+                writable = true,
+                owners = {
+                  { kind = "dependency", pom_label = "app/pom.xml", line = 10 },
+                  { kind = "dependency", pom_label = "service/pom.xml", line = 12 },
+                },
+              },
+            },
           },
         })
       end,
@@ -671,6 +687,9 @@ describe("Java Project Center", function()
       rendered:find("com.acme:library  requested 1.0.0, 2.0.0  selected 2.0.0", 1, true)
     )
     assert.is_truthy(rendered:find("owner dependency_management  pom.xml:14", 1, true))
+    assert.is_truthy(rendered:find("owner reactor_alignment  2 POMs", 1, true))
+    assert.is_truthy(rendered:find("owner dependency  app/pom.xml:10", 1, true))
+    assert.is_truthy(rendered:find("owner dependency  service/pom.xml:12", 1, true))
     assert.is_truthy(rendered:find("blocked external parent outside reactor", 1, true))
   end)
 

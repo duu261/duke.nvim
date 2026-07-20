@@ -180,6 +180,109 @@ describe("reactor repair plans", function()
     assert.matches("unknown or expired", second_err)
   end)
 
+  it("plans one explicit alignment across every proven local owner", function()
+    local events = {}
+    package.loaded["duke.events"] = {
+      build_changed = function(_, _, details)
+        events[#events + 1] = details
+      end,
+    }
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(vim.fs.joinpath(root, "service"), "p")
+    directories[#directories + 1] = root
+    local paths = {
+      vim.fs.joinpath(root, "pom.xml"),
+      vim.fs.joinpath(root, "service", "pom.xml"),
+    }
+    local versions = { "1.0.0", "2.0.0" }
+    local modules = {}
+    local owners = {}
+    for index, path in ipairs(paths) do
+      local lines = {
+        "<project>",
+        "  <modelVersion>4.0.0</modelVersion>",
+        "  <groupId>com.acme</groupId>",
+        "  <artifactId>module-" .. index .. "</artifactId>",
+        "  <version>1.0.0</version>",
+        "  <dependencies>",
+        "    <dependency>",
+        "      <groupId>com.acme</groupId>",
+        "      <artifactId>library</artifactId>",
+        "      <version>" .. versions[index] .. "</version>",
+        "    </dependency>",
+        "  </dependencies>",
+        "</project>",
+      }
+      vim.fn.writefile(lines, path)
+      modules[index] = {
+        id = "com.acme:module-" .. index,
+        build_file = path,
+        model = assert(require("duke.pom").model(lines)),
+      }
+      owners[index] = {
+        kind = "dependency",
+        coordinate = "com.acme:library",
+        owner_coordinate = "com.acme:library",
+        requested_version = versions[index],
+        pom_path = path,
+        line = 10,
+        writable = true,
+      }
+    end
+    local plans = require("duke.reactor_plan")
+    local diagnosis = assert(plans.capture({
+      root = root,
+      kind = "maven",
+      state = "resolved",
+      modules = modules,
+      analysis = {
+        doctor = { active_profiles = {}, warnings = {}, deep = false },
+        findings = {
+          {
+            id = "version_drift:com.acme:library",
+            kind = "version_drift",
+            severity = "warning",
+            coordinate = "com.acme:library",
+            requested_versions = versions,
+            repairable = true,
+            ownership = { kind = "reactor_alignment", writable = true, owners = owners },
+          },
+        },
+      },
+    }))
+    assert.same({ "pom.xml", "service/pom.xml" }, {
+      diagnosis.findings[1].ownership.owners[1].pom_label,
+      diagnosis.findings[1].ownership.owners[2].pom_label,
+    })
+
+    local err, descriptor = wait_call(function(callback)
+      plans.build({
+        diagnosis_id = diagnosis.id,
+        repairs = {
+          { finding_id = "version_drift:com.acme:library", new_version = "3.0.0" },
+        },
+      }, callback)
+    end)
+
+    assert.is_nil(err)
+    assert.equals(2, descriptor.preview.file_count)
+    assert.same({ "pom.xml", "service/pom.xml" }, {
+      descriptor.preview.files[1].pom_label,
+      descriptor.preview.files[2].pom_label,
+    })
+
+    local apply_err, receipt = wait_call(function(callback)
+      plans.apply(descriptor, callback)
+    end)
+    assert.is_nil(apply_err)
+    assert.is_true(receipt.ok)
+    assert.equals(1, #events)
+    assert.same({ "1.0.0", "2.0.0" }, {
+      events[1].changes[1].before,
+      events[1].changes[2].before,
+    })
+  end)
+
   it("rejects stale files without an event", function()
     local _, pom_path, _, snapshot = fixture()
     local event_count = 0

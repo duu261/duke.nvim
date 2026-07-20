@@ -114,7 +114,7 @@ local function public_ownership(owner, root)
   if type(owner) ~= "table" then
     return nil
   end
-  return {
+  local result = {
     kind = owner.kind,
     pom_label = owner.pom_path and relative_label(root, owner.pom_path) or nil,
     line = owner.line,
@@ -123,6 +123,20 @@ local function public_ownership(owner, root)
     writable = owner.writable == true,
     blocked_reason = redacted_text(owner.blocked_reason, root),
   }
+  if type(owner.owners) == "table" then
+    result.owners = vim.tbl_map(function(item)
+      return {
+        kind = item.kind,
+        pom_label = item.pom_path and relative_label(root, item.pom_path) or nil,
+        line = item.line,
+        property = item.property,
+        consumers = vim.deepcopy(item.consumers or {}),
+        writable = item.writable == true,
+        blocked_reason = redacted_text(item.blocked_reason, root),
+      }
+    end, owner.owners)
+  end
+  return result
 end
 
 local function public_finding(finding, root)
@@ -184,15 +198,20 @@ function M.capture(snapshot, opts)
     if type(finding.id) ~= "string" or finding_ids[finding.id] then
       return nil, "reactor diagnosis contains invalid finding IDs"
     end
-    if finding.ownership and finding.ownership.pom_path then
-      local path, path_err = canonical_file(finding.ownership.pom_path)
-      if not path then
-        return nil, path_err
+    if finding.ownership then
+      local owners = finding.ownership.owners or { finding.ownership }
+      for _, owner in ipairs(owners) do
+        if owner.pom_path then
+          local path, path_err = canonical_file(owner.pom_path)
+          if not path then
+            return nil, path_err
+          end
+          if not modules[path] then
+            return nil, "repair owner is not a reactor module POM"
+          end
+          owner.pom_path = path
+        end
       end
-      if not modules[path] then
-        return nil, "repair owner is not a reactor module POM"
-      end
-      finding.ownership.pom_path = path
     end
     finding_ids[finding.id] = vim.deepcopy(finding)
     public_findings[#public_findings + 1] = public_finding(finding, root)
@@ -259,39 +278,47 @@ local function selected_repairs(diagnosis, requested)
     if not finding.repairable or type(finding.ownership) ~= "table" then
       return nil, finding.blocked_reason or "finding is not repairable"
     end
-    local path = finding.ownership.pom_path
-    if not diagnosis.modules[path] then
-      return nil, "repair owner is not a reactor module POM"
-    end
-    local repair
     if selection.action == "exclude" then
       local path_value = finding.paths and finding.paths[selection.path_index or 0]
       local direct = path_value and path_value[2]
       if finding.kind ~= "version_conflict" or not direct then
         return nil, "exclusion requires a valid dependency path"
       end
-      repair = {
+      local repair = {
         kind = "exclude",
         direct_coordinate = direct,
         excluded_coordinate = finding.coordinate,
       }
-      path = diagnosis.modules_by_id[finding.module_id]
+      local path = diagnosis.modules_by_id[finding.module_id]
       if not path then
         return nil, "exclusion module is not in the reactor"
       end
+      grouped[path] = grouped[path] or {}
+      grouped[path][#grouped[path] + 1] = repair
     elseif type(selection.new_version) == "string" and selection.new_version ~= "" then
-      repair = {
-        kind = "upgrade",
-        new_version = selection.new_version,
-        target = vim.deepcopy(finding.ownership),
-      }
-      repair.target.coordinate = finding.coordinate
-      repair.target.consumers = vim.deepcopy(repair.target.consumers or finding.consumers or {})
+      local targets = finding.ownership.kind == "reactor_alignment" and finding.ownership.owners
+        or { finding.ownership }
+      if type(targets) ~= "table" or #targets == 0 then
+        return nil, "repair owner is not a reactor module POM"
+      end
+      for _, target in ipairs(targets) do
+        local path = target.pom_path
+        if not diagnosis.modules[path] then
+          return nil, "repair owner is not a reactor module POM"
+        end
+        local repair = {
+          kind = "upgrade",
+          new_version = selection.new_version,
+          target = vim.deepcopy(target),
+        }
+        repair.target.coordinate = finding.coordinate
+        repair.target.consumers = vim.deepcopy(repair.target.consumers or finding.consumers or {})
+        grouped[path] = grouped[path] or {}
+        grouped[path][#grouped[path] + 1] = repair
+      end
     else
       return nil, "repair requires new_version or exclusion action"
     end
-    grouped[path] = grouped[path] or {}
-    grouped[path][#grouped[path] + 1] = repair
     coordinates[finding.coordinate] = true
   end
   local values = vim.tbl_keys(coordinates)
@@ -339,7 +366,6 @@ function M.build(opts, callback)
         finish(repair_err)
         return
       end
-      vim.list_extend(all_changes, vim.deepcopy(changes))
       entries[#entries + 1] = {
         pom_path = path,
         before = vim.deepcopy(snapshot.lines),
@@ -354,6 +380,9 @@ function M.build(opts, callback)
       end
       return left.pom_path < right.pom_path
     end)
+    for _, entry in ipairs(entries) do
+      vim.list_extend(all_changes, vim.deepcopy(entry.changes))
+    end
     local id, id_err = random_id()
     if not id then
       finish(id_err)
