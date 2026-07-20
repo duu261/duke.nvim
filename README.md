@@ -127,12 +127,15 @@ No source build is required. Install the latest tagged release with the lazy.nvi
 
 1. Run `:DukeHealth` and confirm Java, Maven, and curl are available.
 2. Open an existing Maven or Gradle project and run `:Duke`. Confirm modules and Spring configuration files appear immediately. Press `r` to opt into wrapper-backed resolution; opening the panel alone runs no build tool.
-3. Run `:DukeMaven` from a disposable parent directory. Choose the Maven quickstart archetype, enter temporary coordinates such as `com.example:duke-demo`, review the destination, and confirm.
-4. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm.
-5. Inspect the resulting POM. The plugin adds one root dependency block without reformatting unrelated content.
-6. Run `:DukeInfo com.google.guava:guava` to inspect current Maven Central version information without changing the project.
-7. Run `:DukeTree` to inspect the resolved classpath, then `:DukeWhy com.google.guava:failureaccess` to show why Guava's transitive dependency is present.
-8. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
+3. In a disposable Maven reactor where two child POMs request different versions of one dependency, run `:DukeDoctor`. Confirm active profiles, both requested versions, dependency paths, and relative owner locations appear.
+4. On the drift finding, press `u`, enter one explicit target version, then press `P`. Confirm the preview lists both POMs and exact old/new values without canonical paths or complete POM contents.
+5. Change one source POM after preview, then press `A`. Duke rejects the stale plan before writing. Re-run diagnosis and planning, apply again, save any intentionally modified POM buffer, run `mvn -q validate`, then press `R`; the repaired finding disappears while unrelated findings remain.
+6. Run `:DukeDoctor!`, reject once, then accept. Maven `dependency:analyze` starts only after acceptance and may compile main and test sources.
+7. From a repository checkout, run `make test-file FILE=tests/pom_transaction_spec.lua` for injected second-write rollback and concurrent rollback-conflict proof.
+8. Run `:DukeMaven` from a disposable parent directory. Choose the Maven quickstart archetype, enter temporary coordinates such as `com.example:duke-demo`, review the destination, and confirm.
+9. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm. Inspect the one root dependency-block change.
+10. Run `:DukeInfo com.google.guava:guava`, `:DukeTree`, and `:DukeWhy com.google.guava:failureaccess`, then cancel and confirm separate `:DukeRemove` runs.
+11. Run `:DukeGradle` and `:DukeSpring` in disposable directories to exercise the existing Gradle application and current Spring Initializr creation paths.
 
 For repository verification instead of the interactive path, clone the repository and run `make format`, `make lint`, and `make test`. GitHub CI runs lint plus tests against the exact Neovim 0.11 floor, stable, and nightly.
 
