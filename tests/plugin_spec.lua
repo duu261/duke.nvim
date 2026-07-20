@@ -72,6 +72,7 @@ describe("plugin surface", function()
     assert.equals(2, vim.fn.exists(":DukeClearCache"))
     assert.equals(2, vim.fn.exists(":DukeLog"))
     assert.equals(2, vim.fn.exists(":DukeHealth"))
+    assert.equals(2, vim.fn.exists(":DukeDoctor"))
   end)
 
   it("opens Project Center from Duke inside a Java workspace", function()
@@ -90,6 +91,33 @@ describe("plugin surface", function()
     vim.cmd("Duke")
 
     assert.equals(vim.fn.getcwd(), received)
+  end)
+
+  it("opens shallow and deep Maven Doctor through guarded commands", function()
+    local received = {}
+    local notices = {}
+    package.loaded["duke"] = {
+      project_center = function(opts)
+        received[#received + 1] = opts
+        if #received == 3 then
+          error("Doctor startup failed")
+        end
+      end,
+    }
+    vim.notify = function(message, level)
+      notices[#notices + 1] = { message = message, level = level }
+    end
+
+    vim.cmd("DukeDoctor")
+    vim.cmd("DukeDoctor!")
+    assert.has_no.errors(function()
+      vim.cmd("DukeDoctor")
+    end)
+
+    assert.same({ doctor = true, deep = false }, received[1])
+    assert.same({ doctor = true, deep = true }, received[2])
+    assert.equals(vim.log.levels.ERROR, notices[1].level)
+    assert.matches("failed", notices[1].message)
   end)
 
   it("loads public API without setup", function()
@@ -1925,6 +1953,7 @@ describe("plugin surface", function()
     assert.equals("Duke commands", lines[1])
     assert.is_truthy(table.concat(lines, "\n"):find(":DukeAdd", 1, true))
     assert.is_truthy(table.concat(lines, "\n"):find(":DukeHealth", 1, true))
+    assert.is_truthy(table.concat(lines, "\n"):find(":DukeDoctor", 1, true))
     assert.equals("duke", vim.bo[buf].filetype)
     assert.is_false(vim.bo[buf].modifiable)
     vim.api.nvim_win_close(0, true)

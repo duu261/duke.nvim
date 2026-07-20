@@ -32,6 +32,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, understand existing Jav
 
 - Native Maven, Gradle, and Spring Boot Creation Center with persistent fields, visible validation, Java runtime status, and Spring dependency selection.
 - Native Project Center for Maven reactors and Gradle workspaces, with modules, direct dependencies, Spring configuration files, diagnostics, navigation, and explicit wrapper-backed refresh.
+- Maven Doctor diagnoses reactor-wide version drift, conflicts, duplicate declarations, ownership, and dependency usage, then stages reviewable multi-POM repairs.
 - Maven quickstart and web application archetypes with optional Maven Wrapper generation.
 - Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
 - Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
@@ -74,7 +75,7 @@ Workflow tools:
 | Tool | Needed for |
 | --- | --- |
 | `java` | Java discovery and project workflows |
-| `mvn` | Maven archetype generation, Maven Wrapper generation, managed version resolution, and dependency insight |
+| `mvn` | Maven generation, managed version resolution, dependency insight, and Maven Doctor |
 | `gradle` | Gradle project generation |
 | `curl` | Spring requests and Maven Central dependency search or version lookup |
 | `tar` | Spring archive inspection and extraction |
@@ -118,6 +119,8 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 
 Inside an existing Maven or Gradle project, run `:Duke` instead. Project Center opens immediately from local files without running the build. Press `r` only when you want wrapper-backed dependency resolution.
 
+Inside a Maven workspace, run `:DukeDoctor` for explicit reactor diagnosis. `:DukeDoctor!` adds deep dependency usage analysis after confirmation; Maven may compile main and test sources for that report.
+
 ## Judge testing path
 
 No source build is required. Install the latest tagged release with the lazy.nvim snippet above. The shortest interactive path needs Neovim 0.11+, `java`, `mvn`, `curl`, and network access.
@@ -138,6 +141,7 @@ For repository verification instead of the interactive path, clone the repositor
 | Command | Action |
 | --- | --- |
 | `:Duke` | Open Project Center inside Maven or Gradle workspaces; show command help elsewhere |
+| `:DukeDoctor[!]` | Diagnose a Maven reactor; `!` confirms deep analysis that may compile test sources |
 | `:DukeNew` | Open Creation Center with Maven, Gradle, and Spring Boot choices |
 | `:DukeMaven` | Create Maven quickstart or web application project |
 | `:DukeGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
@@ -262,6 +266,7 @@ Discovery resolves duplicate JDK paths, caps each version probe at one second, a
 - Compact one-line or self-closing project, dependencies, or dependency XML is rejected instead of guessed.
 - POM writes skip write autocommands, so a format-on-save chain cannot reformat the file around an edit. A dependency add or version bump stays a one-line diff you can actually review. Manual `:w` still formats as configured.
 - Multi-upgrade plans live only in the current Neovim session. Apply accepts an opaque random ID, re-reads every source line, ignores caller-mutated preview data, expires before writing, writes once, and emits one build-change event.
+- Reactor repair plans keep canonical paths and complete POM contents private. Apply preflights every POM, compares again at each write, preserves loaded modified buffers, rolls earlier writes back in reverse order after failure, and reports rollback conflicts without overwriting concurrent edits.
 
 ## Project Center
 
@@ -271,9 +276,11 @@ Project Center opens from local files only. `r` explicitly permits read-only bui
 
 The Workspace and Environment groups show available roots, active module, build files, wrapper, build-tool version, Java target, scoped runner JVM, Spring Boot, toolchains, and exact-root JDTLS attachment state. Unknown evidence stays absent or explicitly unknown. Closing and reopening preserves the latest session snapshot. Writing an owned build file invalidates it, while older asynchronous refresh results cannot replace newer data.
 
-Keys: `<CR>` opens the selected module, file, or read-only detail; `r` resolves or retries; `a` starts the existing add workflow for the selected Maven module; `u` plans upgrades for the selected Maven dependency or module; `x` starts confirmed removal; `p` shows known paths or starts existing Maven why-path resolution; `g` jumps to the owning declaration; `/` searches visible declarations plus resolved direct and transitive nodes through Telescope or `vim.ui`; `l` opens `:DukeLog`; `?` shows help; and `q` closes. Opening and refreshing preserve the code window, current buffer, working directory, and unsaved state. Failed refreshes keep the latest snapshot visible and show one concise reason with retry and log actions.
+Keys: `<CR>` opens the selected module, file, or read-only detail; `r` resolves or retries; `a` adds; `u` upgrades or stages a Doctor version repair; `x` removes or stages a Doctor exclusion; `p` shows paths; and `g` jumps to ownership. Doctor keys are `d` for normal diagnosis, `L` for confirmed deep diagnosis, `c` to clear staged repairs, `P` to build and preview, `A` to confirm and apply, and `R` to refresh findings and compare the receipt. `/` searches, `l` opens `:DukeLog`, `?` shows help, and `q` closes. Opening and refreshing preserve the code window, current buffer, working directory, and unsaved state. Failed refreshes keep the latest snapshot visible and show one concise reason with retry and log actions.
 
 Maven analysis reports direct and transitive paths, requested and selected versions, duplicate declarations, cross-module drift, proven conflicts when Maven emits them, shared version-property consumers, and unknown ownership. Upgrade planning may edit a literal root dependency version or a unique direct-root property used only by root dependency versions. Plugin, profile, dependency-management, chained, compact, and otherwise ambiguous property ownership is refused.
+
+`:DukeDoctor` performs explicit wrapper-aware effective-POM, dependency-tree, and active-profile inspection. It does not run during local Project Center open. `:DukeDoctor!` additionally runs Maven Dependency Plugin `dependency:analyze`; that goal may invoke `test-compile`, so Duke confirms first. Findings with profile, external-parent, ambiguous, or otherwise unproven ownership remain blocked. Repair previews show relative POM labels and exact changed values, never canonical write paths or complete POM contents. Successful apply emits one aggregate event only after every POM succeeds. Press `R` afterward to show which selected finding IDs disappeared or remain.
 
 ## Spring metadata and Maven dependency lifecycle
 
@@ -315,7 +322,7 @@ Without handoff, the plugin opens generated application Java source when availab
 
 Successful creation emits `User DukeProjectCreated` with `data.project_dir` and `data.entry_file`.
 
-Successful dependency and module mutations emit `User DukeBuildChanged`. Event data contains `kind`, `root`, `build_file`, `operation`, and `saved`; dependency operations also contain `coordinates`, while module creation contains `module_dir`. `operation` is `add_dependency`, `upgrade_dependency`, `remove_dependency`, `upgrade_parent`, or `add_module`. No-op and failed mutations emit nothing. This optional hook keeps JDTLS ownership outside Duke:
+Successful dependency, module, and reactor mutations emit `User DukeBuildChanged`. Event data contains `kind`, `root`, `build_file`, `operation`, and `saved`; dependency operations also contain `coordinates`, module creation contains `module_dir`, and `repair_reactor` contains `build_files` plus aggregate `changes`. No-op, aborted, and rolled-back mutations emit nothing. This optional hook keeps JDTLS ownership outside Duke:
 
 ```lua
 vim.api.nvim_create_autocmd("User", {
@@ -408,6 +415,30 @@ require("duke").plan_upgrades({
   end
 end)
 ```
+
+Maven Doctor uses three error-first, session-scoped calls. Diagnosis and plan descriptors expose relative labels and display data only; canonical paths and complete POM lines remain private:
+
+```lua
+require("duke").diagnose_workspace({ path = vim.fn.getcwd(), deep = false }, function(err, diagnosis)
+  if err then
+    return vim.notify(err, vim.log.levels.ERROR)
+  end
+  require("duke").plan_repairs({
+    diagnosis_id = diagnosis.id,
+    repairs = {
+      { finding_id = diagnosis.findings[1].id, new_version = "2.0.0" },
+    },
+  }, function(plan_err, plan)
+    if not plan_err then
+      require("duke").apply_reactor_plan(plan, function(apply_err, receipt)
+        print(apply_err or receipt.ok)
+      end)
+    end
+  end)
+end)
+```
+
+`deep = true` may compile main and test sources. Headless callers provide that consent through the option itself. Plans are one-shot, expire within the current Neovim session, reject stale POMs, and ignore all caller changes except the opaque ID used for lookup.
 
 `require("duke").new()` opens Creation Center with the generator selector active. `new_maven()`, `new_gradle()`, and `new_spring()` open the same center with that generator preselected. `new_module()` starts the `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 

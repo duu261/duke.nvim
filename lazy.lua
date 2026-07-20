@@ -4,6 +4,7 @@ return {
   main = "duke",
   cmd = {
     "Duke",
+    "DukeDoctor",
     "DukeNew",
     "DukeMaven",
     "DukeGradle",

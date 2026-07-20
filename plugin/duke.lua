@@ -3,6 +3,18 @@ if vim.g.loaded_duke then
 end
 vim.g.loaded_duke = true
 
+local function guarded(name, callback)
+  local ok, err = pcall(callback)
+  if ok then
+    return
+  end
+  local loaded, log = pcall(require, "duke.log")
+  if loaded then
+    pcall(log.add, "ERROR", name .. " failed: " .. tostring(err))
+  end
+  pcall(vim.notify, "duke.nvim: " .. name .. " failed", vim.log.levels.ERROR)
+end
+
 vim.api.nvim_create_user_command("Duke", function()
   local path = vim.api.nvim_buf_get_name(0)
   path = path ~= "" and path or vim.fn.getcwd()
@@ -12,6 +24,12 @@ vim.api.nvim_create_user_command("Duke", function()
     require("duke").help()
   end
 end, { desc = "Open Java Project Center or command help", force = true })
+
+vim.api.nvim_create_user_command("DukeDoctor", function(command)
+  guarded("DukeDoctor", function()
+    require("duke").project_center({ doctor = true, deep = command.bang })
+  end)
+end, { bang = true, desc = "Diagnose Maven workspace dependencies", force = true })
 
 vim.api.nvim_create_user_command("DukeNew", function()
   require("duke").new()

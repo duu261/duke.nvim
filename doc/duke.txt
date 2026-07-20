@@ -280,7 +280,8 @@ outdated({opts}, {callback})             *duke.outdated()*
 
     All programmatic functions require a callback. The legacy create and
     single-operation APIs above return structured result tables. inspect(),
-    plan_upgrades(), and apply_plan() below use callback(err, result). Every
+    plan_upgrades(), apply_plan(), diagnose_workspace(), plan_repairs(), and
+    apply_reactor_plan() below use callback(err, result). Every
     callback runs once on the Neovim main loop.
 
 add_module({opts}, {callback})           *duke.add_module()*
@@ -331,6 +332,43 @@ inspect([{opts}], {callback})                 *duke.inspect()*
     tree path. Partial output stays explicit, with multiline build-tool
     failures collapsed to one diagnostic line in Project Center.
 
+diagnose_workspace([{opts}], {callback})
+                                      *duke.diagnose_workspace()*
+    Diagnose a Maven workspace without UI. opts.path defaults to current
+    context. deep defaults to false. This explicitly runs wrapper-aware
+    effective-POM, dependency-tree, and active-profile reports. deep = true
+    additionally runs dependency:analyze, which may compile main and test
+    sources. Headless callers consent by setting that option.
+
+    The error-first callback receives an opaque diagnosis ID, state, concise
+    warnings, and normalized findings. Findings include stable IDs,
+    coordinates, requested and selected versions, paths, proven ownership,
+    consumers, repairability, and blocked reasons. Public ownership uses
+    relative POM labels. Canonical paths and complete POM contents remain
+    private and session-scoped.
+
+plan_repairs({opts}, {callback})            *duke.plan_repairs()*
+    Build a reactor repair plan from one diagnosis. opts requires
+    diagnosis_id and a non-empty repairs list. A version repair has finding_id
+    and new_version. A conflict exclusion has finding_id, action = "exclude",
+    and path_index selecting one reported dependency path.
+
+    The opaque one-shot result contains sorted relative POM labels, changed
+    values, shared consumers, file/change counts, and modified-buffer count.
+    Display fields never select write targets. Unknown, expired, duplicate,
+    blocked, ambiguous, profile, external-parent, unsafe-property, compact, or
+    stale repairs are rejected.
+
+apply_reactor_plan({plan}, {callback})
+                                  *duke.apply_reactor_plan()*
+    Apply a plan returned by plan_repairs(). The plan is consumed before I/O.
+    Duke preflights every source, compares each POM again at write time, writes
+    in reactor order, and rolls completed writes back in reverse order after a
+    later failure. Concurrent rollback changes are preserved and reported as
+    conflicts. Loaded modified buffers remain modified and are not forced to
+    disk. Complete success emits one User DukeBuildChanged repair_reactor
+    event; aborts and rollbacks emit none.
+
 plan_upgrades({opts}, {callback})       *duke.plan_upgrades()*
     Build a session-scoped Maven upgrade plan. opts requires pom_path and a
     non-empty changes list. Each change has groupId:artifactId in coordinate
@@ -353,7 +391,8 @@ apply_plan({plan}, {callback})                *duke.apply_plan()*
 
 project_center([{opts}])                    *duke.project_center()*
     Toggle Project Center for opts.path or current context. This is the same
-    interactive view opened by |:Duke| inside a build workspace.
+    interactive view opened by |:Duke| inside a build workspace. opts.doctor
+    starts Maven Doctor; opts.deep requests confirmed deep analysis.
 
 add_dependency()                     *duke.add_dependency()*
     Find the nearest pom.xml and start the same dependency workflow as
@@ -414,12 +453,14 @@ Successful creation emits User DukeProjectCreated. Event data
 contains project_dir and entry_file. Handoff arguments may contain {project}
 and {file}; without placeholders, the project path is appended.
 
-Successful dependency and module mutations emit User DukeBuildChanged. Event
+Successful dependency, module, and reactor mutations emit User
+DukeBuildChanged. Event
 data contains kind, root, build_file, operation, and saved. Dependency events
-also contain coordinates; module creation contains module_dir. No-op and
-failed mutations emit nothing. operation is add_dependency,
-upgrade_dependency, remove_dependency, upgrade_parent, add_module, or
-plan_upgrades. Example optional nvim-jdtls bridge:
+also contain coordinates; module creation contains module_dir. A successful
+repair_reactor event contains build_files and aggregate changes. No-op,
+failed, aborted, and rolled-back mutations emit nothing. operation is
+add_dependency, upgrade_dependency, remove_dependency, upgrade_parent,
+add_module, plan_upgrades, or repair_reactor. Example optional nvim-jdtls bridge:
 >
   vim.api.nvim_create_autocmd("User", {
     pattern = "DukeBuildChanged",
@@ -469,6 +510,12 @@ then choose [Done - N selected]. Both paths show the current selection count.
       x     Start confirmed removal for the selected Maven module.
       p     Show known paths or start Maven why-path resolution.
       g     Jump to the owning declaration.
+      d     Run normal Maven Doctor diagnosis.
+      L     Confirm deep Doctor analysis; Maven may compile test sources.
+      c     Clear staged Doctor repairs.
+      P     Build and preview staged Doctor repairs.
+      A     Confirm and apply the current Doctor plan.
+      R     Refresh Doctor findings and compare the apply receipt.
       /     Search visible declarations and resolved dependency nodes.
       l     Open :DukeLog.
       ?     Show Project Center help.
@@ -481,6 +528,26 @@ then choose [Done - N selected]. Both paths show the current selection count.
     invalidates it, and stale refresh completion cannot replace newer data.
     Failed refresh keeps that visible data, shows a concise reason, and offers
     r to retry or l for full log detail. Active modules carry a * marker.
+
+    On Doctor finding rows, u stages a target version, x stages an exclusion
+    for one selected conflict path, p shows reported paths, g opens a proven
+    relative owner, and <CR> opens finding detail. Existing u, x, p, and g
+    behavior remains unchanged on normal dependency and module rows. Doctor
+    diagnosis never runs during local Project Center open unless explicitly
+    requested by d, L, or |:DukeDoctor|.
+
+                                                 *:DukeDoctor*
+:DukeDoctor[!]
+    Open or refocus Project Center and run Maven Doctor for the current Maven
+    workspace. Normal mode runs effective-POM, dependency-tree, and
+    active-profile reports. The ! form requests deep dependency usage analysis
+    after confirmation; Maven may compile main and test sources.
+
+    Findings show requested and selected versions, paths, relative owner
+    labels and lines, shared consumers, and explicit blocked reasons. Repair
+    plans remain session-scoped and one-shot. Public previews omit canonical
+    paths and complete POM contents. Apply performs a multi-POM transaction;
+    press R afterward to compare selected finding IDs before and after.
 
                                                       *:DukeNew*
 :DukeNew

@@ -1396,6 +1396,7 @@ function M.help()
     "  :DukeRemove       Remove dependencies",
     "  :DukeTree         Show the resolved dependency tree",
     "  :DukeWhy          Explain why a dependency is present",
+    "  :DukeDoctor       Diagnose and repair a Maven reactor",
     "",
     "Inspect",
     "  :DukeInfo         Show Maven Central versions",
