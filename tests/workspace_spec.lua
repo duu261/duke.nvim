@@ -165,7 +165,7 @@ describe("Java workspace discovery", function()
       end,
     }
 
-    local err, result = inspect({ path = root, resolve = true })
+    local err, result = inspect({ path = root, resolve = true, env = {} })
 
     assert.is_nil(err)
     assert.equals(1, enrich_calls)
@@ -186,7 +186,7 @@ describe("Java workspace discovery", function()
       end,
     }
 
-    local err, result = inspect({ path = root, resolve = true })
+    local err, result = inspect({ path = root, resolve = true, env = {} })
 
     assert.is_nil(err)
     assert.equals(1, enrich_calls)
