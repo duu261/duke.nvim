@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.9.0 - 2026-07-20
+
 ### Added
 
 - `:Duke` opens grouped command help in a read-only scratch window.
