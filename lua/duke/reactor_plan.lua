@@ -1,5 +1,5 @@
 local events = require("duke.events")
-local log = require("duke.log")
+local completion = require("duke.completion")
 local pom_file = require("duke.pom_file")
 local pom_repair = require("duke.pom_repair")
 local transaction = require("duke.pom_transaction")
@@ -75,27 +75,6 @@ local function random_id()
     end
   end
   return nil, "cannot create unique reactor plan ID"
-end
-
-local function complete_once(callback, context)
-  local called = false
-  return function(err, result)
-    if called then
-      return
-    end
-    called = true
-    local invoke = function()
-      local ok, callback_err = pcall(callback, err, result)
-      if not ok then
-        log.add("ERROR", context .. " callback failed: " .. tostring(callback_err))
-      end
-    end
-    local scheduled, schedule_err = pcall(vim.schedule, invoke)
-    if not scheduled then
-      log.add("ERROR", context .. " scheduling failed: " .. tostring(schedule_err))
-      invoke()
-    end
-  end
 end
 
 local function relative_label(root, path)
@@ -350,10 +329,10 @@ end
 
 function M.build(opts, callback)
   if type(callback) ~= "function" then
-    log.add("ERROR", "reactor plan callback is required")
+    completion.log("ERROR", "reactor plan callback is required")
     return
   end
-  local finish = complete_once(callback, "reactor plan")
+  local finish = completion.once(callback, "reactor plan")
   local ok, internal_err = pcall(function()
     if type(opts) ~= "table" or type(opts.diagnosis_id) ~= "string" then
       finish("diagnosis_id must be a non-empty string")
@@ -393,6 +372,7 @@ function M.build(opts, callback)
         before = vim.deepcopy(snapshot.lines),
         after = after,
         changes = changes,
+        repairs = vim.deepcopy(repairs),
         order = diagnosis.module_order[path],
       }
     end
@@ -404,6 +384,10 @@ function M.build(opts, callback)
     end)
     for _, entry in ipairs(entries) do
       vim.list_extend(all_changes, vim.deepcopy(entry.changes))
+    end
+    if #all_changes == 0 then
+      finish("selected repairs produce no changes")
+      return
     end
     local id, id_err = random_id()
     if not id then
@@ -446,10 +430,10 @@ end
 
 function M.apply(descriptor, callback)
   if type(callback) ~= "function" then
-    log.add("ERROR", "reactor apply callback is required")
+    completion.log("ERROR", "reactor apply callback is required")
     return
   end
-  local finish = complete_once(callback, "reactor apply")
+  local finish = completion.once(callback, "reactor apply")
   local id = type(descriptor) == "table" and descriptor.id or nil
   local time = vim.uv.now()
   evict(plans, time)
@@ -459,8 +443,26 @@ function M.apply(descriptor, callback)
     return
   end
   plans[id] = nil
+  for _, entry in ipairs(plan.entries) do
+    local after, changes, repair_err = pom_repair.apply(entry.before, entry.repairs)
+    if
+      not after
+      or not vim.deep_equal(after, entry.after)
+      or not vim.deep_equal(changes, entry.changes)
+    then
+      finish(
+        "reactor plan no longer matches canonical repair: " .. tostring(repair_err or "mismatch")
+      )
+      return
+    end
+  end
   local started, start_err = pcall(transaction.apply, plan.root, plan.entries, function(err, result)
-    if not err and result and result.ok then
+    if result then
+      result.root = plan.root
+      result.coordinates = vim.deepcopy(plan.coordinates)
+      result.changes = vim.deepcopy(plan.changes)
+    end
+    if not err and result and result.ok and #result.changed_files > 0 then
       events.build_changed(plan.root_pom, "repair_reactor", {
         root = plan.root,
         build_files = vim.deepcopy(result.changed_files),

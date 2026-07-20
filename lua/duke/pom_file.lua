@@ -128,6 +128,15 @@ function M.replace(snapshot, lines)
     if not chmod_ok then
       error(chmod_err)
     end
+    local latest, latest_err = M.snapshot(snapshot.path)
+    if
+      not latest
+      or not same_lines(latest.lines, current.lines)
+      or latest.buffer ~= current.buffer
+      or latest.modified ~= current.modified
+    then
+      error(latest_err or "stale POM snapshot before rename")
+    end
     local renamed, rename_err = vim.uv.fs_rename(temporary, snapshot.path)
     if not renamed then
       error(rename_err)

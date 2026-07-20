@@ -1,4 +1,4 @@
-local log = require("duke.log")
+local completion = require("duke.completion")
 local pom_file = require("duke.pom_file")
 
 local M = {}
@@ -36,34 +36,20 @@ local function ordered(root, entries)
   return result
 end
 
-local function complete_once(callback)
-  local called = false
-  return function(err, result)
-    if called then
-      return
-    end
-    called = true
-    local invoke = function()
-      local ok, callback_err = pcall(callback, err, result)
-      if not ok then
-        log.add("ERROR", "POM transaction callback failed: " .. tostring(callback_err))
-      end
-    end
-    local scheduled, schedule_err = pcall(vim.schedule, invoke)
-    if not scheduled then
-      log.add("ERROR", "POM transaction scheduling failed: " .. tostring(schedule_err))
-      invoke()
-    end
-  end
-end
-
-local function failure(phase, message)
+local function failure(root, phase, message, applied)
+  local applied_paths = vim.tbl_map(function(entry)
+    return entry.pom_path
+  end, applied or {})
   return {
     ok = false,
+    root = root,
     phase = phase,
     error = message,
+    message = message,
+    applied = applied_paths,
     changed_files = {},
     modified_buffers = {},
+    restored = {},
     rolled_back = {},
     conflicted = {},
   }
@@ -71,10 +57,10 @@ end
 
 function M.apply(root, entries, callback)
   if type(callback) ~= "function" then
-    log.add("ERROR", "POM transaction callback is required")
+    completion.log("ERROR", "POM transaction callback is required")
     return
   end
-  local finish = complete_once(callback)
+  local finish = completion.once(callback, "POM transaction")
   local ok, internal_err = pcall(function()
     if type(root) ~= "string" or type(entries) ~= "table" or #entries == 0 then
       finish("POM transaction requires a root and entries")
@@ -99,7 +85,7 @@ function M.apply(root, entries, callback)
       seen[entry.pom_path] = true
       local snapshot, snapshot_err = pom_file.snapshot(entry.pom_path)
       if not snapshot or not same_lines(snapshot.lines, entry.before) then
-        local result = failure("preflight", snapshot_err or (entry.pom_path .. " is stale"))
+        local result = failure(root, "preflight", snapshot_err or (entry.pom_path .. " is stale"))
         finish(nil, result)
         return
       end
@@ -112,7 +98,7 @@ function M.apply(root, entries, callback)
       if not same_lines(entry.before, entry.after) then
         local saved, replace_err = pom_file.replace(snapshots[entry.pom_path], entry.after)
         if saved == nil then
-          local result = failure("rollback", replace_err)
+          local result = failure(root, "rollback", replace_err, applied)
           for index = #applied, 1, -1 do
             local applied_entry = applied[index]
             local current = pom_file.snapshot(applied_entry.pom_path)
@@ -120,6 +106,7 @@ function M.apply(root, entries, callback)
               local restored = pom_file.replace(current, applied_entry.before)
               if restored ~= nil then
                 result.rolled_back[#result.rolled_back + 1] = applied_entry.pom_path
+                result.restored[#result.restored + 1] = applied_entry.pom_path
               else
                 result.conflicted[#result.conflicted + 1] = applied_entry.pom_path
               end
@@ -128,6 +115,7 @@ function M.apply(root, entries, callback)
             end
           end
           table.sort(result.rolled_back)
+          table.sort(result.restored)
           table.sort(result.conflicted)
           if #result.conflicted > 0 then
             result.phase = "rollback_conflict"
@@ -148,6 +136,7 @@ function M.apply(root, entries, callback)
     end
     finish(nil, {
       ok = true,
+      root = root,
       phase = "complete",
       changed_files = changed_files,
       modified_buffers = modified_buffers,

@@ -1,6 +1,6 @@
 local build = require("duke.build")
 local analyzer = require("duke.dependency_analyzer")
-local log = require("duke.log")
+local completion = require("duke.completion")
 local maven_model = require("duke.maven_model")
 local ownership = require("duke.maven_ownership")
 local process = require("duke.process")
@@ -65,48 +65,17 @@ local function add_warning(snapshot, warning)
   snapshot.state = "partial"
 end
 
-local function guarded_once(handler, on_error)
-  local called = false
-  return function(...)
-    if called then
-      return
-    end
-    called = true
-    local ok, err = pcall(handler, ...)
-    if not ok then
-      on_error(err)
-    end
-  end
-end
-
 function M.inspect(snapshot, opts, callback)
   opts = opts or {}
   if type(callback) ~= "function" then
-    log.add("ERROR", "Maven Doctor callback is required")
+    completion.log("ERROR", "Maven Doctor callback is required")
     return
   end
 
-  local called = false
-  local function finish(err, result)
-    if called then
-      return
-    end
-    called = true
-    local invoke = function()
-      local ok, callback_err = pcall(callback, err, result)
-      if not ok then
-        log.add("ERROR", "Maven Doctor callback failed: " .. tostring(callback_err))
-      end
-    end
-    local scheduled, schedule_err = pcall(vim.schedule, invoke)
-    if not scheduled then
-      log.add("ERROR", "Maven Doctor scheduling failed: " .. tostring(schedule_err))
-      invoke()
-    end
-  end
+  local finish = completion.once(callback, "Maven Doctor")
 
   local function fail_internal(stage, err, result)
-    log.add("ERROR", "Maven Doctor " .. stage .. " failed: " .. tostring(err))
+    completion.log("ERROR", "Maven Doctor " .. stage .. " failed: " .. tostring(err))
     finish("Maven Doctor inspection failed", result)
   end
 
@@ -115,7 +84,7 @@ function M.inspect(snapshot, opts, callback)
     local analyzed_ok, analyzed = pcall(analyzer.analyze, enriched)
     if not analyzed_ok then
       add_warning(enriched, "ownership analysis unavailable")
-      log.add("ERROR", "Maven Doctor dependency analysis failed: " .. tostring(analyzed))
+      completion.log("ERROR", "Maven Doctor dependency analysis failed: " .. tostring(analyzed))
       finish(nil, enriched)
       return
     end
@@ -127,7 +96,7 @@ function M.inspect(snapshot, opts, callback)
     local ownership_ok, rows = pcall(ownership.resolve, enriched)
     if not ownership_ok then
       add_warning(enriched, "ownership analysis unavailable")
-      log.add("ERROR", "Maven Doctor ownership analysis failed: " .. tostring(rows))
+      completion.log("ERROR", "Maven Doctor ownership analysis failed: " .. tostring(rows))
       rows = {}
     end
     existing.ownership = rows
@@ -135,7 +104,7 @@ function M.inspect(snapshot, opts, callback)
     local findings_ok, findings = pcall(analyzer.repairable, analyzed, rows, existing.doctor.usage)
     if not findings_ok then
       add_warning(enriched, "repair analysis unavailable")
-      log.add("ERROR", "Maven Doctor repair analysis failed: " .. tostring(findings))
+      completion.log("ERROR", "Maven Doctor repair analysis failed: " .. tostring(findings))
       findings = {}
     end
     existing.findings = findings
@@ -149,7 +118,7 @@ function M.inspect(snapshot, opts, callback)
   end
 
   local on_enriched
-  on_enriched = guarded_once(function(err, enriched)
+  on_enriched = completion.guard_once(function(err, enriched)
     if err or type(enriched) ~= "table" then
       finish(err or "Maven Doctor received an invalid Maven snapshot", enriched)
       return
@@ -175,25 +144,28 @@ function M.inspect(snapshot, opts, callback)
     local selected_ok, selected = pcall(build.maven, module.build_file, opts.maven_command or "mvn")
     if not selected_ok then
       add_warning(enriched, "active profiles unavailable")
-      log.add("ERROR", "Maven Doctor active profiles failed: " .. tostring(selected))
+      completion.log("ERROR", "Maven Doctor active profiles failed: " .. tostring(selected))
       complete(enriched)
       return
     end
 
     local path = vim.fn.tempname()
     local after_active
-    after_active = guarded_once(function(result)
+    after_active = completion.guard_once(function(result)
       if result.code ~= 0 then
         local message = detail(result)
         cleanup(path)
         add_warning(enriched, "active profiles unavailable")
-        log.add("ERROR", "Maven Doctor active profiles failed: " .. message)
+        completion.log("ERROR", "Maven Doctor active profiles failed: " .. message)
       else
         local lines, read_err = maven_model.read_output(path)
         cleanup(path)
         if not lines then
           add_warning(enriched, "active profiles output unavailable")
-          log.add("ERROR", "Maven Doctor active profiles output failed: " .. tostring(read_err))
+          completion.log(
+            "ERROR",
+            "Maven Doctor active profiles output failed: " .. tostring(read_err)
+          )
         else
           enriched.analysis.doctor.active_profiles = parse_active_profiles(lines)
         end
@@ -205,18 +177,18 @@ function M.inspect(snapshot, opts, callback)
       end
 
       local after_deep
-      after_deep = guarded_once(function(deep_result)
+      after_deep = completion.guard_once(function(deep_result)
         if deep_result.code ~= 0 then
           local message = detail(deep_result)
           add_warning(enriched, "dependency analysis unavailable")
-          log.add("ERROR", "Maven Doctor dependency analysis failed: " .. message)
+          completion.log("ERROR", "Maven Doctor dependency analysis failed: " .. message)
         else
           enriched.analysis.doctor.usage = parse_usage(deep_result.stdout)
         end
         complete(enriched)
       end, function(callback_err)
         fail_internal("dependency analysis callback", callback_err, enriched)
-      end)
+      end, "Maven Doctor dependency analysis")
 
       local started, run_err = pcall(process.run, selected.command, {
         "-q",
@@ -234,7 +206,7 @@ function M.inspect(snapshot, opts, callback)
     end, function(callback_err)
       cleanup(path)
       fail_internal("active profiles callback", callback_err, enriched)
-    end)
+    end, "Maven Doctor active profiles")
 
     local started, run_err = pcall(process.run, selected.command, {
       "-q",
@@ -252,7 +224,7 @@ function M.inspect(snapshot, opts, callback)
     end
   end, function(callback_err)
     fail_internal("enrichment callback", callback_err)
-  end)
+  end, "Maven Doctor enrichment")
 
   local ok, model_err = pcall(maven_model.enrich, snapshot, opts, on_enriched)
   if not ok then

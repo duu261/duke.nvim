@@ -364,12 +364,16 @@ plan_repairs({opts}, {callback})            *duke.plan_repairs()*
 apply_reactor_plan({plan}, {callback})
                                   *duke.apply_reactor_plan()*
     Apply a plan returned by plan_repairs(). The plan is consumed before I/O.
-    Duke preflights every source, compares each POM again at write time, writes
-    in reactor order, and rolls completed writes back in reverse order after a
-    later failure. Concurrent rollback changes are preserved and reported as
-    conflicts. Loaded modified buffers remain modified and are not forced to
-    disk. Complete success emits one User DukeBuildChanged repair_reactor
-    event; aborts and rollbacks emit none.
+    Duke preflights every source, recomputes the canonical repairs, compares
+    each POM again immediately before replacement, writes in reactor order,
+    and rolls completed writes back in reverse order after a later failure.
+    Concurrent changes are preserved and reported as conflicts. Loaded
+    modified buffers remain modified and are not forced to disk. Success
+    receipts contain root, changed_files, modified_buffers, coordinates, and
+    flat changes. Failure receipts contain phase, applied, restored,
+    conflicted, and message fields; rolled_back and error remain compatibility
+    aliases. Complete success emits one User DukeBuildChanged repair_reactor
+    event; no-op, abort, and rollback paths emit none.
 
 plan_upgrades({opts}, {callback})       *duke.plan_upgrades()*
     Build a session-scoped Maven upgrade plan. opts requires pom_path and a

@@ -124,6 +124,26 @@ describe("POM file boundary", function()
     assert.same({ "concurrent" }, vim.fn.readfile(path))
   end)
 
+  it("preserves a concurrent disk write before atomic rename", function()
+    local path = temp_pom(original_lines())
+    local snapshot = assert(pom_file.snapshot(path))
+    local original_writefile = vim.fn.writefile
+    vim.fn.writefile = function(lines, target)
+      local result = original_writefile(lines, target)
+      if target ~= path then
+        original_writefile({ "concurrent during temporary write" }, path)
+      end
+      return result
+    end
+
+    local saved, err = pom_file.replace(snapshot, edited_lines())
+    vim.fn.writefile = original_writefile
+
+    assert.is_nil(saved)
+    assert.matches("stale", err)
+    assert.same({ "concurrent during temporary write" }, vim.fn.readfile(path))
+  end)
+
   it("restores buffer lines when a clean-buffer save fails", function()
     local path = temp_pom(original_lines())
     local buffer = open(path)

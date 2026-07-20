@@ -180,6 +180,47 @@ describe("reactor repair plans", function()
     assert.matches("unknown or expired", second_err)
   end)
 
+  it("recomputes canonical repairs before starting a transaction", function()
+    local _, pom_path, lines, snapshot = fixture()
+    local plans = require("duke.reactor_plan")
+    local diagnosis = assert(plans.capture(snapshot))
+    local _, descriptor = wait_call(function(callback)
+      plans.build({
+        diagnosis_id = diagnosis.id,
+        repairs = { { finding_id = diagnosis.findings[1].id, new_version = "2.0.0" } },
+      }, callback)
+    end)
+    local repair = require("duke.pom_repair")
+    local original_apply = repair.apply
+    repair.apply = function()
+      return { "different transformation" }, { { kind = "different" } }
+    end
+
+    local err = wait_call(function(callback)
+      plans.apply(descriptor, callback)
+    end)
+    repair.apply = original_apply
+
+    assert.matches("no longer matches", err)
+    assert.same(lines, vim.fn.readfile(pom_path))
+  end)
+
+  it("rejects selected repairs that produce no changes", function()
+    local _, _, _, snapshot = fixture()
+    local plans = require("duke.reactor_plan")
+    local diagnosis = assert(plans.capture(snapshot))
+
+    local err, descriptor = wait_call(function(callback)
+      plans.build({
+        diagnosis_id = diagnosis.id,
+        repairs = { { finding_id = diagnosis.findings[1].id, new_version = "1.0.0" } },
+      }, callback)
+    end)
+
+    assert.matches("no changes", err)
+    assert.is_nil(descriptor)
+  end)
+
   it("plans one explicit alignment across every proven local owner", function()
     local events = {}
     package.loaded["duke.events"] = {

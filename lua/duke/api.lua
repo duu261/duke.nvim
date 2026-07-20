@@ -1,3 +1,5 @@
+local completion_boundary = require("duke.completion")
+
 local M = {}
 
 local function log(level, message)
@@ -8,22 +10,15 @@ local function log(level, message)
 end
 
 local function completion(callback)
-  local completed = false
-  return function(result)
-    if completed then
-      return
-    end
-    completed = true
+  local finish = completion_boundary.once(function(_, result)
     if type(callback) ~= "function" then
       log("ERROR", "programmatic API callback must be a function")
       return
     end
-    vim.schedule(function()
-      local ok, err = pcall(callback, result)
-      if not ok then
-        log("ERROR", "programmatic API callback failed: " .. tostring(err))
-      end
-    end)
+    callback(result)
+  end, "programmatic API")
+  return function(result)
+    finish(nil, result)
   end
 end
 
@@ -45,28 +40,11 @@ local function positive_number(value)
 end
 
 local function inspect_error(callback, message)
-  vim.schedule(function()
-    local ok, err = pcall(callback, message)
-    if not ok then
-      log("ERROR", "programmatic inspect callback failed: " .. tostring(err))
-    end
-  end)
+  completion_boundary.once(callback, "programmatic inspect")(message)
 end
 
 local function reactor_completion(callback, operation)
-  local completed = false
-  return function(err, result)
-    if completed then
-      return
-    end
-    completed = true
-    vim.schedule(function()
-      local ok, callback_err = pcall(callback, err, result)
-      if not ok then
-        log("ERROR", "programmatic " .. operation .. " callback failed: " .. tostring(callback_err))
-      end
-    end)
-  end
+  return completion_boundary.once(callback, "programmatic " .. operation)
 end
 
 local function absolute(path)

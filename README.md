@@ -445,7 +445,7 @@ require("duke").diagnose_workspace({
 end)
 ```
 
-`resolve = true` is required because diagnosis runs Maven reports. `deep = true` provides separate consent for analysis that may compile main and test sources. Plans are one-shot, expire within the current Neovim session, reject stale POMs, and ignore all caller changes except the opaque ID used for lookup.
+`resolve = true` is required because diagnosis runs Maven reports. `deep = true` provides separate consent for analysis that may compile main and test sources. Plans are one-shot, expire within the current Neovim session, reject stale POMs, and ignore all caller changes except the opaque ID used for lookup. Success receipts contain the reactor root, changed files, modified buffers, coordinates, and flat changes. Failure receipts identify the phase, applied, restored, and conflicted files, plus a concise message.
 
 `require("duke").new()` opens Creation Center with the generator selector active. `new_maven()`, `new_gradle()`, and `new_spring()` open the same center with that generator preselected. `new_module()` starts the `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
