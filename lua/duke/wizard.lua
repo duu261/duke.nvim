@@ -16,6 +16,14 @@ local function notify(message, level)
   vim.notify("duke.nvim: " .. message, level or vim.log.levels.INFO)
 end
 
+local java_lts_versions =
+  { ["8"] = true, ["11"] = true, ["17"] = true, ["21"] = true, ["25"] = true }
+
+local function format_java_version(version)
+  local value = tostring(version)
+  return java_lts_versions[value] and (value .. "  (LTS)") or value
+end
+
 local function cache_fallback_message(fallback)
   local age = require("duke.metadata").format_age(fallback.age_seconds)
   if fallback.reason == "schema" then
@@ -208,6 +216,7 @@ function M.java_version(config)
     require("duke.picker").select_one(versions, {
       prompt = "Java version",
       default = selected_default,
+      format_item = format_java_version,
     }, function(java_version)
       if not java_version then
         callback(nil)
@@ -317,6 +326,7 @@ function M.spring_java_version(config)
     require("duke.picker").select_one(versions, {
       prompt = "Java version",
       default = default_version,
+      format_item = format_java_version,
     }, function(java_version)
       if not java_version then
         callback(nil)
@@ -330,7 +340,7 @@ end
 
 function M.spring_metadata_fetch(config)
   return function(state, callback)
-    notify("loading Spring Initializr metadata")
+    local progress = require("duke.progress").task("Loading Spring Initializr metadata")
     local metadata = require("duke.metadata")
     metadata.fetch_cached(
       config.spring.metadata_url,
@@ -338,10 +348,12 @@ function M.spring_metadata_fetch(config)
       nil,
       function(fetch_error, client, source, fallback)
         if fetch_error then
+          progress:fail()
           notify_error(fetch_error)
           callback(nil)
           return
         end
+        progress:done()
         if source == "cache" and fallback then
           notify(cache_fallback_message(fallback))
         end

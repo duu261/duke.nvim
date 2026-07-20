@@ -3,6 +3,10 @@ if vim.g.loaded_duke then
 end
 vim.g.loaded_duke = true
 
+vim.api.nvim_create_user_command("Duke", function()
+  require("duke").help()
+end, { desc = "Show duke.nvim commands", force = true })
+
 vim.api.nvim_create_user_command("DukeNew", function()
   require("duke").new()
 end, { desc = "Choose and create a Java project", force = true })

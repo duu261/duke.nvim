@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- `:Duke` opens grouped command help in a read-only scratch window.
+- Long-running Initializr, managed-dependency, and Maven Central operations show truthful start, count, completion, and failure feedback.
+- Dependency pickers use consistent coordinates, contextual version and scope prompts, Java LTS markers, and selected-item counts in both Telescope and `vim.ui` flows.
+
+### Changed
+
+- `:DukeAdd` and `:DukeUpgrade` now require a final confirmation, defaulted to cancel, before writing `pom.xml`.
+- Successful dependency insertion reports the coordinates actually added.
+
+### Fixed
+
+- Removed unused dependency preview callbacks. The Telescope dropdown never created a preview pane, despite earlier documentation claiming previews were visible.
+- Managed-dependency progress stays in interactive commands; stable headless API calls remain UI-free.
+
 ## 0.8.0 - 2026-07-17
 
 ### Added

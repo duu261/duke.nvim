@@ -33,11 +33,11 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 - Managed dependency version resolution through `mvn dependency:list` for `:DukeOutdated` and `:DukeUpgrade`; dependencies controlled by a parent or BOM show their resolved version instead of being hidden or skipped.
 - `:DukeInfo [groupId:artifactId]` shows latest and recent versions with release dates from Maven Central in a read-only scratch buffer.
 - `:DukeBootUpgrade` detects Spring Boot versions from parent POMs and from `spring-boot-dependencies` BOM imports in `<dependencyManagement>`, with BOM upgrades deferred.
-- Version pickers show Maven Central release dates; `:DukeAdd` Telescope preview shows artifact description, release date, and version.
+- Version pickers show Maven Central release dates and name the selected dependency in follow-up prompts.
 - Add a module to an existing Maven multi-module reactor with parent-first, rollback-safe promotion.
 - Separate project Java target and Maven or Gradle runner JVM selection.
 - Private staging, target collision protection, structural POM edits that stay one-line reviewable diffs, and offline metadata fallback.
-- Telescope or native `vim.ui` pickers, including multi-select dependency workflows.
+- Telescope or native `vim.ui` pickers, including visible multi-select counts and Java LTS markers.
 - Generated Java entry opening, `User DukeProjectCreated`, and optional post-create handoff.
 
 Focused scope: project creation and Maven dependency lifecycle management. The plugin does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
@@ -76,14 +76,10 @@ Maven Central search and version lookup need network access for every query. The
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-{
-  "duu261/duke.nvim",
-  version = "*",
-  opts = {},
-}
+{ "duu261/duke.nvim", version = "*", opts = {} }
 ```
 
-`version = "*"` follows tagged releases. Remove it to follow `main`.
+`version = "*"` follows tagged releases. Remove it to follow `main`. See [lazy.lua](lazy.lua) for the full command-lazy-loading spec.
 
 ## ⚡ Quick start
 
@@ -105,6 +101,7 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 
 | Command | Action |
 | --- | --- |
+| `:Duke` | Show grouped command help |
 | `:DukeNew` | Choose Maven, Gradle, or Spring Boot, then run its wizard |
 | `:DukeMaven` | Create Maven quickstart or web application project |
 | `:DukeGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
@@ -120,7 +117,7 @@ Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Project
 | `:DukeLog` | Show internal operation log |
 | `:DukeHealth` | Load lazy plugin and run its health check |
 
-With Telescope, use `<Tab>` to toggle add or removal choices and `<Enter>` to finish. Without Telescope, select dependencies one at a time through `vim.ui.select`, then choose `[Done]`. Updates select one dependency per run.
+With Telescope, use `<Tab>` to toggle add or removal choices and `<Enter>` to finish. Without Telescope, select dependencies one at a time through `vim.ui.select`, then choose the `[Done - N selected]` row. Both paths show the current selection count. Updates select one dependency per run.
 
 Every generator asks for a destination parent directory, defaulting to Neovim's current working directory. A final review shows destination, coordinates, build system, Java target, runner JVM when applicable, and workflow-specific settings. Choosing `Cancel` starts no generator process.
 
@@ -234,9 +231,9 @@ An unreachable Initializr host, or a remote payload the plugin no longer recogni
 
 Dependency insertion exposes only entries representable by one normal Maven `<dependency>` block. Entries requiring BOM import, custom repository, or annotation-processor wiring stay hidden. Those entries remain available during new Spring project creation, where Initializr can generate complete Maven configuration. Spring catalog and Maven Central add pickers mark root dependencies already present in the current POM with `[installed]`; marked rows remain selectable, and structural duplicate detection remains the write guard.
 
-For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `groupId:artifactId` plus latest version. Selecting one artifact opens a newest-first version picker with release dates when available, defaulted to that latest version, then a scope picker with `compile` as the default and `test`, `provided`, or `runtime` as alternatives. Compile scope emits no `<scope>` element. Multi-select keeps each artifact's latest version and compile scope without another prompt. Malformed result rows are skipped without discarding valid neighbors, and `pom` artifacts remain excluded. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
+For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `groupId:artifactId` plus latest version. Selecting one artifact opens a newest-first version picker with release dates when available, defaulted to that latest version, then a scope picker with `compile` as the default and `test`, `provided`, or `runtime` as alternatives. Both prompts include the dependency coordinate. Compile scope emits no `<scope>` element. Multi-select keeps each artifact's latest version and compile scope without another prompt. A final confirmation, defaulted to cancel, lists every dependency before the POM write. Success reports coordinates actually added. Malformed result rows are skipped without discarding valid neighbors, and `pom` artifacts remain excluded. Ranking comes from Maven Central. Rerun the command to refine a query. Search has no cache or offline fallback.
 
-`:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list with release dates when available. The latest version is marked; selecting the current version is a no-op. Managed dependencies whose version comes from a parent or BOM are shown with their resolved version (resolved by `mvn dependency:list`) and marked as managed; selecting one notifies about `:DukeBootUpgrade` instead of opening a version picker. Property-backed versions such as `${library.version}` are listed but rejected with the property name because property editing is outside plugin scope. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
+`:DukeUpgrade` lists root dependencies with explicit `<version>` elements and updates one per run from Maven Central's newest-first version list with release dates when available. The latest version is marked; selecting the current version is a no-op. A final current-to-target confirmation defaults to cancel before writing. Managed dependencies whose version comes from a parent or BOM are shown with their resolved version (resolved by `mvn dependency:list`) and marked as managed; selecting one notifies about `:DukeBootUpgrade` instead of opening a version picker. Property-backed versions such as `${library.version}` are listed but rejected with the property name because property editing is outside plugin scope. Only version text changes; scope, type, classifier, exclusions, comments, and formatting stay untouched.
 
 `:DukeBootUpgrade` upgrades a Spring Boot `pom.xml`'s `<parent>` `<version>` from Maven Central's full release history for `org.springframework.boot:spring-boot-starter-parent`, so patch bumps on an old line (2.7.x to 2.7.18) stay reachable even after Initializr stops generating that line. A project with a corporate parent that manages Boot through `spring-boot-dependencies` in `<dependencyManagement>` is detected and its version is shown, but BOM version upgrades are deferred. A non-Boot project, or a pom with no Boot version at all, is refused. A property-backed parent version, for example `${boot.version}`, is refused with the property name; property editing is outside plugin scope. Picking the version already in the pom is a no-op. An explicit confirmation, defaulted to cancel, shows the current and target version before writing; declining or cancelling the version picker leaves `pom.xml` byte-identical. The pom is re-read after the picker and before the write, so an edit made while the picker was open is caught rather than overwritten. Only the parent `<version>` text changes; no Java version, property, or dependency edit accompanies the bump.
 

@@ -2,6 +2,7 @@ describe("plugin surface", function()
   local original_cwd
   local original_notify
   local temporary_directories = {}
+  local format_dependency = require("duke.picker").format_dependency
 
   before_each(function()
     original_cwd = vim.fn.getcwd()
@@ -47,6 +48,7 @@ describe("plugin surface", function()
   end
 
   it("registers lazy user commands", function()
+    assert.equals(2, vim.fn.exists(":Duke"))
     assert.equals(2, vim.fn.exists(":DukeNew"))
     assert.equals(2, vim.fn.exists(":DukeMaven"))
     assert.equals(2, vim.fn.exists(":DukeGradle"))
@@ -84,6 +86,7 @@ describe("plugin surface", function()
     assert.is_function(plugin.upgrade_parent)
     assert.is_function(plugin.outdated)
     assert.is_function(plugin.remove)
+    assert.is_function(plugin.help)
   end)
 
   it("routes the unified workflow picker to each generator", function()
@@ -289,7 +292,7 @@ describe("plugin surface", function()
     assert.is_truthy(received.review:find("Dependencies: none", 1, true))
   end)
 
-  it("notifies once when the Spring metadata step resolves from cache", function()
+  it("finishes Spring metadata progress before reporting cache fallback", function()
     local notices = {}
     vim.notify = function(message)
       notices[#notices + 1] = message
@@ -317,9 +320,10 @@ describe("plugin surface", function()
     end)
 
     assert.is_not_nil(advanced)
-    assert.equals(2, #notices)
-    assert.is_truthy(notices[2]:find("unreachable", 1, true))
-    assert.is_truthy(notices[2]:find("3 days ago", 1, true))
+    assert.equals(3, #notices)
+    assert.is_truthy(notices[2]:find("done", 1, true))
+    assert.is_truthy(notices[3]:find("unreachable", 1, true))
+    assert.is_truthy(notices[3]:find("3 days ago", 1, true))
   end)
 
   it("does not notify about cache when the Spring metadata step resolves from remote", function()
@@ -347,8 +351,9 @@ describe("plugin surface", function()
     end)
 
     assert.is_not_nil(advanced)
-    assert.equals(1, #notices)
-    assert.is_truthy(notices[1]:find("loading Spring Initializr metadata", 1, true))
+    assert.equals(2, #notices)
+    assert.is_truthy(notices[1]:find("Loading Spring Initializr metadata", 1, true))
+    assert.is_truthy(notices[2]:find("done", 1, true))
   end)
 
   it("uses schema wording when the Spring metadata step resolves from cache after drift", function()
@@ -375,8 +380,8 @@ describe("plugin surface", function()
     local step = wizard.spring_metadata_fetch({ spring = { metadata_url = "https://x" } })
     step({}, function() end)
 
-    assert.equals(2, #notices)
-    assert.is_truthy(notices[2]:find("schema not recognized", 1, true))
+    assert.equals(3, #notices)
+    assert.is_truthy(notices[3]:find("schema not recognized", 1, true))
   end)
 
   it("uses Maven Central for plain Maven poms and rereads before insertion", function()
@@ -389,6 +394,10 @@ describe("plugin surface", function()
     vim.opt.runtimepath:prepend(original_cwd)
     vim.cmd("enew!")
     local received = {}
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
 
     package.loaded["duke.pom"] = {
       spring_boot_version = function()
@@ -426,6 +435,7 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       input = function(_, _, callback)
         callback("guava")
       end,
@@ -441,7 +451,7 @@ describe("plugin surface", function()
         callback(items)
       end,
       select_one = function(items, opts, callback)
-        if opts.prompt == "Maven Central version" then
+        if opts.prompt:find("Maven Central version", 1, true) == 1 then
           assert.same({
             { name = "33.4.8-jre", value = "33.4.8-jre" },
             { name = "33.4.7-jre", value = "33.4.7-jre" },
@@ -450,7 +460,7 @@ describe("plugin surface", function()
           callback("33.4.7-jre")
           return
         end
-        assert.equals("Maven dependency scope", opts.prompt)
+        assert.equals("Maven dependency scope for com.google.guava:guava:33.4.7-jre", opts.prompt)
         assert.same({ "compile", "test", "provided", "runtime" }, items)
         assert.equals("compile", opts.default)
         vim.fn.writefile({
@@ -460,6 +470,9 @@ describe("plugin surface", function()
           "</project>",
         }, pom_path)
         callback("test")
+      end,
+      confirm = function()
+        return true
       end,
     }
 
@@ -478,6 +491,9 @@ describe("plugin surface", function()
       },
     }, received.dependencies)
     assert.is_truthy(table.concat(received.lines, "\n"):find("changed while scope picker", 1, true))
+    assert.is_truthy(
+      table.concat(notices, "\n"):find("added com.google.guava:guava:33.4.7-jre [test]", 1, true)
+    )
   end)
 
   it("cancels Maven Central insertion when scope selection is cancelled", function()
@@ -527,7 +543,7 @@ describe("plugin surface", function()
       end,
       select_one = function(items, opts, callback)
         prompts[#prompts + 1] = opts.prompt
-        if opts.prompt == "Maven Central version" then
+        if opts.prompt:find("Maven Central version", 1, true) == 1 then
           callback(items[1])
         else
           callback(nil)
@@ -537,7 +553,102 @@ describe("plugin surface", function()
 
     require("duke").add_dependency()
 
-    assert.same({ "Maven Central version", "Maven dependency scope" }, prompts)
+    assert.same({
+      "Maven Central version for org.junit.jupiter:junit-jupiter",
+      "Maven dependency scope for org.junit.jupiter:junit-jupiter:5.13.4",
+    }, prompts)
+    assert.same(original, vim.fn.readfile(pom_path))
+  end)
+
+  it("requires confirmation before Maven Central insertion", function()
+    local pom_path = open_pom({ "<project>", "  <artifactId>demo</artifactId>", "</project>" })
+    local original = vim.fn.readfile(pom_path)
+    local confirmation
+
+    package.loaded["duke.pom"] = {
+      spring_boot_version = function()
+        return nil
+      end,
+      list = function()
+        return {}
+      end,
+      insert = function()
+        error("pom insert must not run without confirmation")
+      end,
+    }
+    package.loaded["duke.maven"] = {
+      validate = function()
+        return nil
+      end,
+    }
+    package.loaded["duke.maven_central"] = {
+      search = function(_, callback)
+        callback(nil, {
+          { group_id = "com.example", artifact_id = "first", version = "1.0" },
+          { group_id = "com.example", artifact_id = "second", version = "2.0" },
+        })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      input = function(_, _, callback)
+        callback("example")
+      end,
+      select_many = function(items, _, callback)
+        callback(items)
+      end,
+      confirm = function(message, action)
+        confirmation = message
+        assert.equals("Add", action)
+        return false
+      end,
+    }
+
+    require("duke").add_dependency()
+
+    assert.is_truthy(confirmation:find("com.example:first:1.0", 1, true))
+    assert.is_truthy(confirmation:find("com.example:second:2.0", 1, true))
+    assert.same(original, vim.fn.readfile(pom_path))
+  end)
+
+  it("requires confirmation before Maven dependency upgrade", function()
+    local original = {
+      "<project>",
+      "  <dependencies>",
+      "    <dependency>",
+      "      <groupId>com.example</groupId>",
+      "      <artifactId>demo</artifactId>",
+      "      <version>1.0</version>",
+      "    </dependency>",
+      "  </dependencies>",
+      "</project>",
+    }
+    local pom_path = open_pom(original)
+    local confirmation
+    package.loaded["duke.maven_central"] = {
+      versions = function(_, _, callback)
+        callback(nil, { "2.0", "1.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
+      select_one = function(items, opts, callback)
+        if opts.prompt == "Update Maven dependency" then
+          callback(items[1])
+        else
+          callback("2.0")
+        end
+      end,
+      confirm = function(message, action)
+        confirmation = message
+        assert.equals("Upgrade", action)
+        return false
+      end,
+    }
+
+    require("duke").update_dependency()
+
+    assert.is_truthy(confirmation:find("com.example:demo", 1, true))
+    assert.is_truthy(confirmation:find("1.0 -> 2.0", 1, true))
     assert.same(original, vim.fn.readfile(pom_path))
   end)
 
@@ -583,6 +694,7 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           assert.equals(1, #items)
@@ -590,7 +702,7 @@ describe("plugin surface", function()
           callback(items[1])
           return
         end
-        assert.equals("Maven Central version", opts.prompt)
+        assert.equals("Maven Central version for org.junit.jupiter:junit-jupiter", opts.prompt)
         assert.same({
           { name = "5.13.4", value = "5.13.4" },
           { name = "5.12.0", value = "5.12.0" },
@@ -598,6 +710,9 @@ describe("plugin surface", function()
         assert.equals("5.13.4", opts.default)
         assert.equals("5.13.4  (latest)", opts.format_item({ name = "5.13.4", value = "5.13.4" }))
         callback("5.13.4")
+      end,
+      confirm = function()
+        return true
       end,
     }
 
@@ -651,6 +766,7 @@ describe("plugin surface", function()
     assert.equals(0, central_calls)
 
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_one = function(items, opts, callback)
         if opts.prompt == "Update Maven dependency" then
           callback(items[1])
@@ -730,6 +846,9 @@ describe("plugin surface", function()
           callback("2.0")
         end
       end,
+      confirm = function()
+        return true
+      end,
     }
     require("duke").update_dependency()
 
@@ -785,6 +904,7 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_one = function(items, opts, callback)
         if opts.prompt == "Outdated Maven dependencies" then
           assert.equals(1, #items)
@@ -792,7 +912,7 @@ describe("plugin surface", function()
           callback(items[1])
           return
         end
-        assert.equals("Maven Central version", opts.prompt)
+        assert.equals("Maven Central version for junit:junit", opts.prompt)
         assert.same({
           { name = "4.13.2", value = "4.13.2" },
           { name = "3.8.1", value = "3.8.1" },
@@ -849,6 +969,7 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_one = function(items, opts, callback)
         assert.equals("Outdated Maven dependencies", opts.prompt)
         assert.equals(1, #items)
@@ -898,8 +1019,9 @@ describe("plugin surface", function()
 
     require("duke").outdated_dependencies()
 
-    assert.equals(2, #notices)
-    assert.is_truthy(notices[2]:find("1 managed dependency skipped", 1, true))
+    assert.equals(4, #notices)
+    assert.is_truthy(notices[2]:find("failed", 1, true))
+    assert.is_truthy(notices[4]:find("1 managed dependency skipped", 1, true))
     assert.same(managed, vim.fn.readfile(pom_path))
 
     local current = {
@@ -923,8 +1045,10 @@ describe("plugin surface", function()
 
     require("duke").outdated_dependencies()
 
-    assert.equals(1, #notices)
-    assert.is_truthy(notices[1]:find("1 dependencies checked, all up to date", 1, true))
+    assert.equals(4, #notices)
+    assert.is_truthy(notices[1]:find("0/1", 1, true))
+    assert.is_truthy(notices[2]:find("1/1", 1, true))
+    assert.is_truthy(notices[4]:find("1 dependencies checked, all up to date", 1, true))
     assert.same(current, vim.fn.readfile(pom_path))
   end)
 
@@ -1056,6 +1180,7 @@ describe("plugin surface", function()
     }
     local picker_items, format_fn
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_one = function(items, opts, callback)
         picker_items = items
         format_fn = opts.format_item
@@ -1103,11 +1228,12 @@ describe("plugin surface", function()
       end,
     }
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       input = function(_, _, callback)
         callback("test")
       end,
       select_many = function(items, opts, callback)
-        assert.equals("com.google.guava:guava  33.4.8-jre [installed]", opts.format_item(items[1]))
+        assert.equals("com.google.guava:guava  33.4.8-jre  [installed]", opts.format_item(items[1]))
         assert.equals("org.junit.jupiter:junit-jupiter  5.13.4", opts.format_item(items[2]))
         callback(nil)
       end,
@@ -1145,6 +1271,7 @@ describe("plugin surface", function()
     vim.cmd("enew!")
     local confirmation
     package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
       select_many = function(items, opts, callback)
         assert.equals("Remove Maven dependencies", opts.prompt)
         assert.equals("com.example:first", opts.format_item(items[1]))
@@ -1249,6 +1376,10 @@ describe("plugin surface", function()
     vim.opt.runtimepath:prepend(original_cwd)
     vim.cmd("enew!")
     local received = {}
+    local notices = {}
+    vim.notify = function(message)
+      notices[#notices + 1] = message
+    end
 
     package.loaded["duke.config"] = {
       get = function()
@@ -1288,6 +1419,114 @@ describe("plugin surface", function()
                 groupId = "org.springframework.boot",
                 artifactId = "spring-boot-starter-web",
               },
+              data = {
+                groupId = "org.springframework.boot",
+                artifactId = "spring-boot-starter-data-jpa",
+              },
+            },
+          })
+        else
+          callback(nil, { dependencies = {} })
+        end
+      end,
+      flatten_dependencies = function()
+        return {
+          { id = "web", name = "Spring Web", group = "Web" },
+          { id = "data", name = "Spring Data JPA", group = "Data" },
+        }
+      end,
+      is_catalog = function()
+        return true
+      end,
+      is_client = function()
+        return true
+      end,
+      is_direct = function()
+        return true
+      end,
+      resolve = function(_, ids)
+        assert.same({ "data" }, ids)
+        return {
+          { group_id = "org.springframework.boot", artifact_id = "spring-boot-starter-data-jpa" },
+        }, {}
+      end,
+    }
+    package.loaded["duke.maven_central"] = {
+      search = function()
+        error("Maven Central path must not run")
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      format_dependency = format_dependency,
+      input = function()
+        error("search prompt must not run")
+      end,
+      select_many = function(items, opts, callback)
+        assert.equals("Add Spring dependencies", opts.prompt)
+        assert.equals(
+          "org.springframework.boot:spring-boot-starter-web  Spring Web [Web]  [installed]",
+          opts.format_item(items[1])
+        )
+        assert.equals(
+          "org.springframework.boot:spring-boot-starter-data-jpa  Spring Data JPA [Data]",
+          opts.format_item(items[2])
+        )
+        callback({ items[2] })
+      end,
+      confirm = function()
+        return true
+      end,
+    }
+
+    require("duke").add_dependency()
+
+    assert.same({
+      { group_id = "org.springframework.boot", artifact_id = "spring-boot-starter-data-jpa" },
+    }, received.dependencies)
+    assert.is_truthy(
+      table
+        .concat(notices, "\n")
+        :find("added org.springframework.boot:spring-boot-starter-data-jpa", 1, true)
+    )
+  end)
+
+  it("requires confirmation before Spring catalog insertion", function()
+    local pom_path = open_pom({ "<project>", "  <state>initial</state>", "</project>" })
+    local original = vim.fn.readfile(pom_path)
+    local confirmation
+    package.loaded["duke.config"] = {
+      get = function()
+        return {
+          spring = {
+            metadata_url = "https://initializr.test",
+            dependencies_url = "https://initializr.test/dependencies",
+          },
+        }
+      end,
+    }
+    package.loaded["duke.pom"] = {
+      spring_boot_version = function()
+        return "3.5.4"
+      end,
+      list = function()
+        return {}
+      end,
+      insert = function()
+        error("Spring dependency insert must not run without confirmation")
+      end,
+    }
+    package.loaded["duke.metadata"] = {
+      cache_path = function(kind)
+        return kind
+      end,
+      fetch_cached = function(url, _, _, callback)
+        if url:find("dependencies", 1, true) then
+          callback(nil, {
+            dependencies = {
+              web = {
+                groupId = "org.springframework.boot",
+                artifactId = "spring-boot-starter-web",
+              },
             },
           })
         else
@@ -1312,27 +1551,21 @@ describe("plugin surface", function()
         }, {}
       end,
     }
-    package.loaded["duke.maven_central"] = {
-      search = function()
-        error("Maven Central path must not run")
-      end,
-    }
     package.loaded["duke.picker"] = {
-      input = function()
-        error("search prompt must not run")
-      end,
-      select_many = function(items, opts, callback)
-        assert.equals("Add Spring dependencies", opts.prompt)
-        assert.equals("Spring Web  [Web] [installed]", opts.format_item(items[1]))
+      select_many = function(items, _, callback)
         callback(items)
+      end,
+      confirm = function(message, action)
+        confirmation = message
+        assert.equals("Add", action)
+        return false
       end,
     }
 
     require("duke").add_dependency()
 
-    assert.same({
-      { group_id = "org.springframework.boot", artifact_id = "spring-boot-starter-web" },
-    }, received.dependencies)
+    assert.is_truthy(confirmation:find("org.springframework.boot:spring-boot-starter-web", 1, true))
+    assert.same(original, vim.fn.readfile(pom_path))
   end)
 
   it("caches public Java runtime discovery", function()
@@ -2362,6 +2595,19 @@ describe("plugin surface", function()
     assert.is_truthy(lines[1]:find("com.google.guava:guava", 1, true))
     assert.is_truthy(lines[2]:find("33.4.8-jre", 1, true))
     vim.api.nvim_create_buf = original_create
+  end)
+
+  it("shows grouped command help in a closable scratch buffer", function()
+    require("duke").help()
+
+    local buf = vim.api.nvim_get_current_buf()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    assert.equals("Duke commands", lines[1])
+    assert.is_truthy(table.concat(lines, "\n"):find(":DukeAdd", 1, true))
+    assert.is_truthy(table.concat(lines, "\n"):find(":DukeHealth", 1, true))
+    assert.equals("duke", vim.bo[buf].filetype)
+    assert.is_false(vim.bo[buf].modifiable)
+    vim.api.nvim_win_close(0, true)
   end)
 
   it("rejects invalid coordinates in :DukeInfo", function()

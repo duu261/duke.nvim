@@ -343,6 +343,48 @@ local function installed_coordinates(lines)
   return installed
 end
 
+local function dependency_summary(dependency)
+  local coordinate = dependency.group_id .. ":" .. dependency.artifact_id
+  if dependency.version then
+    coordinate = coordinate .. ":" .. dependency.version
+  end
+  if dependency.scope then
+    coordinate = coordinate .. " [" .. dependency.scope .. "]"
+  end
+  return coordinate
+end
+
+local function confirm_dependency_add(dependencies)
+  local lines = { "Add dependencies to pom.xml?" }
+  for _, dependency in ipairs(dependencies) do
+    lines[#lines + 1] = dependency_summary(dependency)
+  end
+  return require("duke.picker").confirm(table.concat(lines, "\n"), "Add")
+end
+
+local function dependencies_not_installed(lines, dependencies)
+  local installed, list_error = installed_coordinates(lines)
+  if list_error then
+    return nil, list_error
+  end
+  local result = {}
+  for _, dependency in ipairs(dependencies) do
+    local key = dependency.group_id .. ":" .. dependency.artifact_id
+    if not installed[key] then
+      result[#result + 1] = dependency
+    end
+  end
+  return result
+end
+
+local function added_message(added, dependencies, suffix)
+  if added ~= #dependencies then
+    return string.format("added %d dependencies%s", added, suffix)
+  end
+  local coordinates = vim.tbl_map(dependency_summary, dependencies)
+  return string.format("added %s%s", table.concat(coordinates, ", "), suffix)
+end
+
 local function insert_maven_dependencies(pom_path, selected)
   local maven = require("duke.maven")
   for _, dependency in ipairs(selected) do
@@ -351,13 +393,20 @@ local function insert_maven_dependencies(pom_path, selected)
       notify_error("invalid Maven Central coordinate: " .. coordinate_error)
       return
     end
-    dependency.preview = nil
     dependency.description = nil
     dependency.timestamp = nil
+  end
+  if not confirm_dependency_add(selected) then
+    return
   end
   local latest_lines, buffer, was_modified = read_pom(pom_path)
   if not latest_lines then
     notify_error("cannot reread " .. pom_path)
+    return
+  end
+  local expected_added, list_error = dependencies_not_installed(latest_lines, selected)
+  if list_error then
+    notify_error(list_error)
     return
   end
   if require("duke.pom").spring_boot_version(latest_lines) then
@@ -375,7 +424,7 @@ local function insert_maven_dependencies(pom_path, selected)
   end
   local saved = save_pom(pom_path, updated, buffer, was_modified)
   local suffix = saved and "" or " (buffer left unsaved)"
-  notify(string.format("added %d dependencies%s", added, suffix))
+  notify(added_message(added, expected_added, suffix))
 end
 
 local function fetch_versions_display(group_id, artifact_id, callback)
@@ -421,7 +470,7 @@ local function choose_maven_versions(pom_path, selected)
       table.insert(versions, 1, { name = dependency.version, value = dependency.version })
     end
     require("duke.picker").select_one(versions, {
-      prompt = "Maven Central version",
+      prompt = "Maven Central version for " .. dependency.group_id .. ":" .. dependency.artifact_id,
       default = dependency.version,
     }, function(item)
       if not item then
@@ -430,7 +479,12 @@ local function choose_maven_versions(pom_path, selected)
       local chosen = vim.deepcopy(dependency)
       chosen.version = item.value or item
       require("duke.picker").select_one({ "compile", "test", "provided", "runtime" }, {
-        prompt = "Maven dependency scope",
+        prompt = "Maven dependency scope for "
+          .. chosen.group_id
+          .. ":"
+          .. chosen.artifact_id
+          .. ":"
+          .. chosen.version,
         default = "compile",
       }, function(scope)
         if not scope then
@@ -487,30 +541,16 @@ function M.add_dependency()
           notify_error(list_error)
           return
         end
-        for _, item in ipairs(choices) do
-          item.preview = function(_, _, bufnr)
-            local desc = item.description or "no description available"
-            local date = ""
-            if item.timestamp and item.timestamp > 0 then
-              date = os.date("  (%Y-%m-%d)", math.floor(item.timestamp / 1000))
-            end
-            local preview_lines = {
-              item.group_id .. ":" .. item.artifact_id .. date,
-              "Latest: " .. (item.version or "unknown"),
-              "",
-            }
-            for _, line in ipairs(vim.split(desc, "\n")) do
-              preview_lines[#preview_lines + 1] = line
-            end
-            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, preview_lines)
-          end
-        end
         require("duke.picker").select_many(choices, {
           prompt = "Add Maven Central dependencies",
           format_item = function(item)
             local coordinate = item.group_id .. ":" .. item.artifact_id
-            local suffix = installed[coordinate] and " [installed]" or ""
-            return string.format("%s  %s%s", coordinate, item.version, suffix)
+            return require("duke.picker").format_dependency({
+              group_id = item.group_id,
+              artifact_id = item.artifact_id,
+              version = item.version,
+              installed = installed[coordinate] == true,
+            })
           end,
         }, function(selected)
           if not selected or #selected == 0 then
@@ -523,9 +563,11 @@ function M.add_dependency()
     return
   end
 
-  notify("loading dependencies for Spring Boot " .. boot_version)
+  local progress =
+    require("duke.progress").task("Loading dependencies for Spring Boot " .. boot_version)
   fetch_client(function(client_error, client, client_source, client_fallback)
     if client_error then
+      progress:fail()
       notify_error(client_error)
       return
     end
@@ -534,6 +576,7 @@ function M.add_dependency()
     end
     fetch_catalog(boot_version, function(catalog_error, catalog, catalog_source, catalog_fallback)
       if catalog_error then
+        progress:fail()
         notify_error(catalog_error)
         return
       end
@@ -542,16 +585,19 @@ function M.add_dependency()
       end
       local picker_lines = read_pom(pom_path)
       if not picker_lines then
+        progress:fail()
         notify_error("cannot reread " .. pom_path)
         return
       end
       local picker_boot_version = require("duke.pom").spring_boot_version(picker_lines)
       if picker_boot_version ~= boot_version then
+        progress:fail()
         notify_error("pom.xml Spring Boot version changed; run command again")
         return
       end
       local installed, list_error = installed_coordinates(picker_lines)
       if list_error then
+        progress:fail()
         notify_error(list_error)
         return
       end
@@ -560,26 +606,21 @@ function M.add_dependency()
       for _, item in ipairs(metadata.flatten_dependencies(client)) do
         local coordinate = catalog.dependencies and catalog.dependencies[item.id]
         if metadata.is_direct(coordinate) then
-          item.preview = function(_, _, bufnr)
-            local preview_lines = { item.name .. "  [" .. (item.group or "?") .. "]" }
-            if item.description then
-              preview_lines[#preview_lines + 1] = ""
-              for _, line in ipairs(vim.split(item.description, "\n")) do
-                preview_lines[#preview_lines + 1] = line
-              end
-            end
-            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, preview_lines)
-          end
           choices[#choices + 1] = item
         end
       end
+      progress:done()
       require("duke.picker").select_many(choices, {
         prompt = "Add Spring dependencies",
         format_item = function(item)
           local coordinate = catalog.dependencies and catalog.dependencies[item.id]
           local key = coordinate and (coordinate.groupId .. ":" .. coordinate.artifactId)
-          local suffix = key and installed[key] and " [installed]" or ""
-          return string.format("%s  [%s]%s", item.name, item.group, suffix)
+          return require("duke.picker").format_dependency({
+            group_id = coordinate.groupId,
+            artifact_id = coordinate.artifactId,
+            label = item.name .. " [" .. item.group .. "]",
+            installed = key and installed[key] == true,
+          })
         end,
       }, function(selected)
         if not selected or #selected == 0 then
@@ -593,6 +634,9 @@ function M.add_dependency()
           notify_error("dependency coordinates unavailable: " .. table.concat(missing, ", "))
           return
         end
+        if not confirm_dependency_add(dependencies) then
+          return
+        end
         local latest_lines, buffer, was_modified = read_pom(pom_path)
         if not latest_lines then
           notify_error("cannot reread " .. pom_path)
@@ -601,6 +645,12 @@ function M.add_dependency()
         local latest_boot_version = require("duke.pom").spring_boot_version(latest_lines)
         if latest_boot_version ~= boot_version then
           notify_error("pom.xml Spring Boot version changed; run command again")
+          return
+        end
+        local expected_added, latest_list_error =
+          dependencies_not_installed(latest_lines, dependencies)
+        if latest_list_error then
+          notify_error(latest_list_error)
           return
         end
         local updated, added, insert_error = require("duke.pom").insert(latest_lines, dependencies)
@@ -614,7 +664,7 @@ function M.add_dependency()
         end
         local saved = save_pom(pom_path, updated, buffer, was_modified)
         local suffix = saved and "" or " (buffer left unsaved)"
-        notify(string.format("added %d dependencies%s", added, suffix))
+        notify(added_message(added, expected_added, suffix))
       end)
     end)
   end)
@@ -629,6 +679,18 @@ local function same_dependency(left, right)
     and right
     and left.group_id == right.group_id
     and left.artifact_id == right.artifact_id
+end
+
+local function resolve_managed_dependencies(pom_path, dependencies, callback)
+  local progress = require("duke.progress").task("Resolving managed dependencies")
+  require("duke.managed").resolve(pom_path, dependencies, function(err, resolved)
+    if err then
+      progress:fail()
+    else
+      progress:done()
+    end
+    callback(err, resolved)
+  end)
 end
 
 local function select_dependency_upgrade(pom_path, selected, available_versions)
@@ -653,7 +715,7 @@ local function select_dependency_upgrade(pom_path, selected, available_versions)
     }
   end
   require("duke.picker").select_one(versions, {
-    prompt = "Maven Central version",
+    prompt = "Maven Central version for " .. dependency_label(selected),
     default = versions[1].value,
     format_item = function(version)
       return version.value == versions[1].value and (version.name .. "  (latest)") or version.name
@@ -665,6 +727,19 @@ local function select_dependency_upgrade(pom_path, selected, available_versions)
     local version = type(item) == "table" and (item.value or item) or item
     if version == selected.version then
       notify(dependency_label(selected) .. " already uses version " .. version)
+      return
+    end
+    if
+      not require("duke.picker").confirm(
+        string.format(
+          "Upgrade %s?\n%s -> %s",
+          dependency_label(selected),
+          selected.version,
+          version
+        ),
+        "Upgrade"
+      )
+    then
       return
     end
 
@@ -769,15 +844,12 @@ function M.update_dependency()
     require("duke.picker").select_one(choices, {
       prompt = "Update Maven dependency",
       format_item = function(dependency)
-        local label = dependency_label(dependency)
-        if dependency.version then
-          local suffix = ""
-          if dependency.managed then
-            suffix = "  (managed by " .. managing_parent_name .. ")"
-          end
-          return string.format("%s  %s%s", label, dependency.version, suffix)
-        end
-        return label
+        return require("duke.picker").format_dependency({
+          group_id = dependency.group_id,
+          artifact_id = dependency.artifact_id,
+          version = dependency.version,
+          managed_by = dependency.managed and (managing_parent_name or "parent POM") or nil,
+        })
       end,
     }, function(selected)
       if not selected then
@@ -804,7 +876,7 @@ function M.update_dependency()
   end
 
   if #managed_deps > 0 then
-    require("duke.managed").resolve(pom_path, managed_deps, function(mvn_error, resolved)
+    resolve_managed_dependencies(pom_path, managed_deps, function(mvn_error, resolved)
       if mvn_error then
         local noun = #managed_deps == 1 and "dependency" or "dependencies"
         notify(
@@ -1021,6 +1093,7 @@ function M.outdated_dependencies()
   local outdated = {}
   local checked = 0
   local index = 1
+  local progress
 
   local function present(unchecked, lookup_error)
     if unchecked > 0 then
@@ -1044,16 +1117,13 @@ function M.outdated_dependencies()
     require("duke.picker").select_one(outdated, {
       prompt = "Outdated Maven dependencies",
       format_item = function(item)
-        local label = string.format(
-          "%s  %s -> %s",
-          dependency_label(item.dependency),
-          item.dependency.version,
-          item.latest
-        )
-        if item.dependency.managed then
-          label = label .. "  (managed by " .. (managing_parent_name or "parent") .. ")"
-        end
-        return label
+        return require("duke.picker").format_dependency({
+          group_id = item.dependency.group_id,
+          artifact_id = item.dependency.artifact_id,
+          version = item.dependency.version,
+          latest_version = item.latest,
+          managed_by = item.dependency.managed and (managing_parent_name or "parent") or nil,
+        })
       end,
     }, function(selected)
       if selected then
@@ -1074,6 +1144,7 @@ function M.outdated_dependencies()
 
   local function inspect_next()
     if index > #candidates then
+      progress:done()
       present(0)
       return
     end
@@ -1083,10 +1154,12 @@ function M.outdated_dependencies()
       dependency.artifact_id,
       function(version_error, versions)
         if version_error then
+          progress:fail()
           present(#candidates - index + 1, version_error)
           return
         end
         checked = checked + 1
+        progress:next()
         local latest = versions[1]
         if latest and latest ~= dependency.version then
           outdated[#outdated + 1] = {
@@ -1119,11 +1192,12 @@ function M.outdated_dependencies()
     if skipped > 0 then
       notify(skipped_outdated_notice(managed_skipped, property_backed))
     end
+    progress = require("duke.progress").batch(#candidates, "Checking Maven Central")
     inspect_next()
   end
 
   if #managed_deps > 0 then
-    require("duke.managed").resolve(pom_path, managed_deps, function(mvn_error, resolved)
+    resolve_managed_dependencies(pom_path, managed_deps, function(mvn_error, resolved)
       if mvn_error then
         start_inspect(#managed_deps, mvn_error)
       else
@@ -1170,7 +1244,9 @@ function M.remove_dependency()
 
   require("duke.picker").select_many(dependencies, {
     prompt = "Remove Maven dependencies",
-    format_item = dependency_label,
+    format_item = function(dependency)
+      return require("duke.picker").format_dependency(dependency)
+    end,
   }, function(selected)
     if not selected or #selected == 0 then
       return
@@ -1219,20 +1295,53 @@ local function render_scratch(lines, title)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
   vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "duke-info"
-  local width = vim.o.columns - 2
-  local height = math.min(#lines, vim.o.lines - 4)
+  vim.bo[buf].filetype = "duke"
+  vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = buf, silent = true })
+  local widest = 1
+  for _, line in ipairs(lines) do
+    widest = math.max(widest, vim.fn.strdisplaywidth(line))
+  end
+  local width = math.max(1, math.min(widest + 2, math.max(1, vim.o.columns - 4)))
+  local height = math.max(1, math.min(#lines, math.max(1, vim.o.lines - 4)))
   vim.api.nvim_open_win(buf, true, {
     relative = "editor",
     width = width,
     height = height,
-    row = 1,
-    col = 1,
+    row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+    col = math.max(0, math.floor((vim.o.columns - width) / 2)),
     style = "minimal",
     border = "single",
     title = title,
     title_pos = "center",
   })
+end
+
+function M.help()
+  render_scratch({
+    "Duke commands",
+    "",
+    "Create",
+    "  :DukeNew          Choose Maven, Gradle, or Spring Boot",
+    "  :DukeMaven        Create a Maven project",
+    "  :DukeGradle       Create a Gradle project",
+    "  :DukeSpring       Create a Spring Boot project",
+    "  :DukeModule       Add a Maven reactor module",
+    "",
+    "Dependencies",
+    "  :DukeAdd          Add dependencies",
+    "  :DukeUpgrade      Upgrade one dependency",
+    "  :DukeBootUpgrade  Upgrade Spring Boot parent",
+    "  :DukeOutdated     Find outdated dependencies",
+    "  :DukeRemove       Remove dependencies",
+    "",
+    "Inspect",
+    "  :DukeInfo         Show Maven Central versions",
+    "  :DukeHealth       Check requirements",
+    "  :DukeLog          Show operation details",
+    "  :DukeClearCache   Clear Initializr cache",
+    "",
+    "Press q to close",
+  }, "Duke")
 end
 
 local function show_coordinate_info(coord)

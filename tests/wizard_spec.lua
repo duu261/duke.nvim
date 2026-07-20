@@ -87,6 +87,41 @@ describe("Wizard engine", function()
   end)
 
   describe("domain steps", function()
+    it("marks Java LTS choices without changing their values", function()
+      package.loaded["duke"] = {
+        java_runtimes = function()
+          return { active = "23", homes = { ["17"] = "/jdk/17", ["23"] = "/jdk/23" } }
+        end,
+      }
+      package.loaded["duke.java"] = {
+        installed = function()
+          return { "8", "17", "23", "25" }
+        end,
+        default = function()
+          return "23"
+        end,
+      }
+      local received
+      package.loaded["duke.picker"] = {
+        select_one = function(items, opts, callback)
+          received = { items = items, opts = opts }
+          callback(nil)
+        end,
+      }
+      wizard = require("duke.wizard")
+
+      wizard.java_version({ java_versions = {}, java_homes = {}, java_version = "auto" })(
+        {},
+        function() end
+      )
+
+      assert.same({ "8", "17", "23", "25" }, received.items)
+      assert.equals("8  (LTS)", received.opts.format_item("8"))
+      assert.equals("17  (LTS)", received.opts.format_item("17"))
+      assert.equals("23", received.opts.format_item("23"))
+      assert.equals("25  (LTS)", received.opts.format_item("25"))
+    end)
+
     it("rejects a missing destination before later prompts", function()
       local prompts = {}
       local missing = vim.fn.tempname()

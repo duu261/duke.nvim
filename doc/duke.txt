@@ -354,7 +354,11 @@ destination, coordinates, build system, Java target, runner JVM when
 applicable, and workflow-specific settings. Canceling starts no generator
 process. With Telescope, use <Tab> to toggle dependencies and <Enter> to
 finish. Without Telescope, select dependencies through vim.ui one at a time,
-then choose [Done].
+then choose [Done - N selected]. Both paths show the current selection count.
+
+                                                         *:Duke*
+:Duke
+    Open grouped command help. Press q to close the scratch window.
 
                                                       *:DukeNew*
 :DukeNew
@@ -405,6 +409,8 @@ then choose [Done].
     Spring catalog and Maven Central rows already present in the root
     dependencies block carry [installed]. Marked rows remain selectable;
     structural duplicate detection remains the write guard.
+    A final confirmation, defaulted to cancel, lists every dependency before
+    writing. Success reports coordinates actually added.
     If Initializr no longer
     supplies an old Boot version's catalog, insertion requires a valid
     same-URL cache, compatible custom server, or Boot upgrade. Maven Central
@@ -421,7 +427,8 @@ then choose [Done].
     explicit-version dependencies the behavior is unchanged: select one,
     then choose from Maven Central versions in newest-first order. The
     current version is marked and selecting it is a no-op. Property-backed
-    versions are rejected with the property name. Only version text changes;
+    versions are rejected with the property name. A final current-to-target
+    confirmation defaults to cancel before writing. Only version text changes;
     scope and all other block content stay untouched. POM writes skip write
     autocommands, so a format-on-save chain cannot reformat the file around
     the edit and bury it in a whole-file diff. A manual :w still formats
@@ -506,6 +513,7 @@ creation report the detected runner Java.
 
 Spring Boot versions and full-project Maven or Gradle types come from
 Initializr metadata. Dependency choices use the selected Boot version.
+Java 8, 11, 17, 21, and 25 choices carry an LTS marker.
 
 ==============================================================================
 6. OFFLINE METADATA                            *duke-offline*

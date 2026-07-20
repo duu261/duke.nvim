@@ -1,5 +1,25 @@
 local M = {}
 
+function M.format_dependency(item)
+  local text = item.group_id .. ":" .. item.artifact_id
+  if item.version then
+    text = text .. "  " .. item.version
+  end
+  if item.latest_version then
+    text = text .. " -> " .. item.latest_version
+  end
+  if item.label then
+    text = text .. "  " .. item.label
+  end
+  if item.managed_by then
+    text = text .. "  (managed by " .. item.managed_by .. ")"
+  end
+  if item.installed then
+    text = text .. "  [installed]"
+  end
+  return text
+end
+
 local function display(item, formatter)
   if type(item) == "table" and item.__done then
     return item.name
@@ -73,7 +93,6 @@ function M.select_one(items, opts, callback)
             value = item,
             display = text,
             ordinal = text,
-            preview = item.preview,
           }
         end,
       }),
@@ -95,7 +114,10 @@ local function fallback_many(items, opts, callback)
   local selected_ids = {}
 
   local function next_choice()
-    local choices = { { __done = true, name = "[Done]" } }
+    local count = #selected
+    local choices = {
+      { __done = true, name = string.format("[Done - %d selected]", count) },
+    }
     for _, item in ipairs(items) do
       local id = type(item) == "table" and (item.id or item.value) or item
       if not selected_ids[id] then
@@ -103,7 +125,7 @@ local function fallback_many(items, opts, callback)
       end
     end
     vim.ui.select(choices, {
-      prompt = opts.prompt,
+      prompt = string.format("%s  (%d selected)", opts.prompt, count),
       format_item = function(item)
         return display(item, opts.format_item)
       end,
@@ -135,9 +157,30 @@ function M.select_many(items, opts, callback)
   local choices = { done }
   vim.list_extend(choices, items)
   local picker_opts = telescope.themes.get_dropdown({})
+  local function title(count)
+    return string.format("%s [%d]  Tab toggle | Enter finish", opts.prompt, count)
+  end
+  local function selected_count(picker)
+    local count = 0
+    for _, entry in ipairs(picker:get_multi_selection()) do
+      if type(entry.value) ~= "table" or not entry.value.__done then
+        count = count + 1
+      end
+    end
+    return count
+  end
+  local function update_title(prompt_buffer)
+    local picker = telescope.state.get_current_picker(prompt_buffer)
+    local next_title = title(selected_count(picker))
+    picker.prompt_title = next_title
+    local border = picker.layout and picker.layout.prompt and picker.layout.prompt.border
+    if border and border.change_title then
+      border:change_title(next_title)
+    end
+  end
   telescope.pickers
     .new(picker_opts, {
-      prompt_title = opts.prompt .. "  <Tab> toggle, <Enter> finish",
+      prompt_title = title(0),
       finder = telescope.finders.new_table({
         results = choices,
         entry_maker = function(item)
@@ -146,7 +189,18 @@ function M.select_many(items, opts, callback)
         end,
       }),
       sorter = telescope.config.generic_sorter(picker_opts),
-      attach_mappings = function(prompt_buffer)
+      attach_mappings = function(prompt_buffer, map)
+        local function toggle(move)
+          return function()
+            telescope.actions.toggle_selection(prompt_buffer)
+            update_title(prompt_buffer)
+            move(prompt_buffer)
+          end
+        end
+        map("i", "<Tab>", toggle(telescope.actions.move_selection_worse))
+        map("n", "<Tab>", toggle(telescope.actions.move_selection_worse))
+        map("i", "<S-Tab>", toggle(telescope.actions.move_selection_better))
+        map("n", "<S-Tab>", toggle(telescope.actions.move_selection_better))
         telescope.actions.select_default:replace(function()
           local picker = telescope.state.get_current_picker(prompt_buffer)
           local entries = picker:get_multi_selection()

@@ -3,6 +3,7 @@ return {
   version = "*",
   main = "duke",
   cmd = {
+    "Duke",
     "DukeNew",
     "DukeMaven",
     "DukeGradle",
