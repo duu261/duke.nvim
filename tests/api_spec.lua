@@ -125,7 +125,7 @@ describe("programmatic API", function()
 
     local calls = {}
     require("duke").diagnose_workspace(
-      { path = "/workspace", deep = true, env = {} },
+      { path = "/workspace", resolve = true, deep = true, env = {} },
       function(err, result)
         calls[#calls + 1] = { err = err, result = result }
       end
@@ -140,12 +140,20 @@ describe("programmatic API", function()
 
   it("validates reactor API requests and contains startup failures", function()
     local invalid = wait_result(function(callback)
-      require("duke").diagnose_workspace({ deep = "yes" }, function(err)
+      require("duke").diagnose_workspace({ resolve = true, deep = "yes" }, function(err)
         callback({ ok = err == nil, error = err })
       end)
     end)
     assert.is_false(invalid.ok)
     assert.matches("boolean", invalid.error)
+
+    local no_consent = wait_result(function(callback)
+      require("duke").diagnose_workspace({}, function(err)
+        callback({ ok = err == nil, error = err })
+      end)
+    end)
+    assert.is_false(no_consent.ok)
+    assert.matches("resolve must be true", no_consent.error)
 
     package.loaded["duke.workspace"] = {
       inspect = function(_, callback)
@@ -153,7 +161,7 @@ describe("programmatic API", function()
       end,
     }
     local non_maven = wait_result(function(callback)
-      require("duke").diagnose_workspace({}, function(err)
+      require("duke").diagnose_workspace({ resolve = true }, function(err)
         callback({ ok = err == nil, error = err })
       end)
     end)

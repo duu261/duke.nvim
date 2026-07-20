@@ -23,6 +23,15 @@ local function effective_versions(module)
   return versions
 end
 
+local function declared_version(module, dependency)
+  local version = dependency and dependency.version
+  local property = version and version:match("^%${([%w_.-]+)}$")
+  if property and module.model.properties and module.model.properties[property] then
+    return module.model.properties[property].value
+  end
+  return version
+end
+
 function M.analyze(snapshot)
   local analysis = {
     modules = {},
@@ -35,13 +44,21 @@ function M.analyze(snapshot)
     },
     paths = {},
   }
-  local resolved_versions = {}
+  local requested_versions = {}
 
   for _, module in ipairs(snapshot.modules or {}) do
     analysis.modules[#analysis.modules + 1] = module.id
     local declarations = index_declarations(module)
     local effective = effective_versions(module)
     for coordinate, owners in pairs(declarations) do
+      local versions = requested_versions[coordinate] or {}
+      for _, owner in ipairs(owners) do
+        local version = declared_version(module, owner)
+        if version then
+          versions[version] = true
+        end
+      end
+      requested_versions[coordinate] = versions
       if #owners > 1 then
         analysis.findings.duplicates[#analysis.findings.duplicates + 1] = {
           coordinate = coordinate,
@@ -69,6 +86,9 @@ function M.analyze(snapshot)
           depth = depth,
           direct = depth == 1,
           raw_owner = owner,
+          raw_owner_count = owners and #owners or 0,
+          requested_version = declared_version(module, owner),
+          pom_path = module.build_file,
           effective_version = effective[child.coordinate],
           property = property_name,
           property_consumers = property_name
@@ -93,10 +113,6 @@ function M.analyze(snapshot)
             selected = child.omitted_for_conflict or child.omittedForConflict,
             path = child_path,
           }
-        else
-          local versions = resolved_versions[child.coordinate] or {}
-          versions[child.version or "unknown"] = true
-          resolved_versions[child.coordinate] = versions
         end
         walk(child, child_path, depth + 1)
       end
@@ -106,7 +122,7 @@ function M.analyze(snapshot)
     end
   end
 
-  for coordinate, versions in pairs(resolved_versions) do
+  for coordinate, versions in pairs(requested_versions) do
     local values = vim.tbl_keys(versions)
     table.sort(values)
     if #values > 1 then
@@ -125,6 +141,39 @@ function M.analyze(snapshot)
     end)
   end
   return analysis
+end
+
+local function exclusion_owner(analysis, conflict)
+  local path = conflict.path or {}
+  local direct_coordinate = path[2]
+  if not direct_coordinate then
+    return nil
+  end
+  local matches = {}
+  for _, dependency in ipairs(analysis.dependencies or {}) do
+    if
+      dependency.module_id == conflict.module_id
+      and dependency.coordinate == direct_coordinate
+      and dependency.direct == true
+    then
+      matches[#matches + 1] = dependency
+    end
+  end
+  if
+    #matches ~= 1
+    or type(matches[1].raw_owner) ~= "table"
+    or matches[1].raw_owner_count ~= 1
+    or type(matches[1].pom_path) ~= "string"
+  then
+    return nil
+  end
+  return {
+    module_id = conflict.module_id,
+    direct_coordinate = direct_coordinate,
+    pom_path = matches[1].pom_path,
+    line = matches[1].raw_owner.start_line,
+    writable = true,
+  }
 end
 
 function M.paths(analysis, coordinate, module_id)
@@ -229,10 +278,13 @@ local function decorate(finding, rows, analysis)
     )
   finding.consumers = owner and vim.deepcopy(owner.consumers or {}) or {}
   finding.selected_version = finding.selected_version or (owner and owner.selected_version)
+  local upgrade = owner ~= nil and owner.writable == true
+  local exclude = finding.exclusion ~= nil and finding.exclusion.writable == true
+  finding.repair_actions = { upgrade = upgrade, exclude = exclude }
   if finding.force_blocked then
     finding.repairable = false
   else
-    finding.repairable = owner ~= nil and owner.writable == true
+    finding.repairable = upgrade or exclude
   end
   if not finding.repairable and not finding.blocked_reason then
     finding.blocked_reason = owner and owner.blocked_reason or "writable owner unavailable"
@@ -257,6 +309,7 @@ function M.repairable(analysis, ownership_rows, usage)
       requested_versions = unique_sorted({ conflict.omitted, conflict.selected }),
       selected_version = conflict.selected,
       paths = conflict.path and { vim.deepcopy(conflict.path) } or nil,
+      exclusion = exclusion_owner(analysis, conflict),
     }, ownership_rows, analysis)
   end
   for _, drift in ipairs(grouped.drift or {}) do
@@ -292,7 +345,9 @@ function M.repairable(analysis, ownership_rows, usage)
 
   local mediated_seen = {}
   for _, dependency in ipairs(analysis.dependencies or {}) do
-    local requested = dependency.raw_owner and dependency.raw_owner.version
+    local requested = dependency.effective_version
+      or dependency.requested_version
+      or (dependency.raw_owner and dependency.raw_owner.version)
     if requested and dependency.version and requested ~= dependency.version then
       local mediated_key = key(dependency.module_id, dependency.coordinate)
       if not mediated_seen[mediated_key] then

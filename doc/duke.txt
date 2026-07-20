@@ -335,17 +335,17 @@ inspect([{opts}], {callback})                 *duke.inspect()*
 diagnose_workspace([{opts}], {callback})
                                       *duke.diagnose_workspace()*
     Diagnose a Maven workspace without UI. opts.path defaults to current
-    context. deep defaults to false. This explicitly runs wrapper-aware
-    effective-POM, dependency-tree, and active-profile reports. deep = true
-    additionally runs dependency:analyze, which may compile main and test
-    sources. Headless callers consent by setting that option.
+    context. resolve = true is required because this runs wrapper-aware
+    effective-POM, dependency-tree, and active-profile reports. deep defaults
+    to false. deep = true provides separate consent for dependency:analyze,
+    which may compile main and test sources.
 
     The error-first callback receives an opaque diagnosis ID, state, active
     profile IDs, concise warnings, and normalized findings. Findings include
     stable IDs, coordinates, requested and selected versions, paths, proven
-    ownership, consumers, repairability, and blocked reasons. Public ownership
-    uses relative POM labels. Canonical paths and complete POM contents remain
-    private and session-scoped.
+    ownership, consumers, action-specific upgrade or exclusion repairability,
+    and blocked reasons. Public ownership uses relative POM labels. Canonical
+    paths and complete POM contents remain private and session-scoped.
 
 plan_repairs({opts}, {callback})            *duke.plan_repairs()*
     Build a reactor repair plan from one diagnosis. opts requires

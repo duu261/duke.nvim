@@ -989,6 +989,10 @@ function M.diagnose_workspace(opts, callback)
     complete("path must be a non-empty string")
     return
   end
+  if opts.resolve ~= true then
+    complete("resolve must be true to run Maven Doctor reports")
+    return
+  end
   if opts.deep ~= nil and type(opts.deep) ~= "boolean" then
     complete("deep must be a boolean")
     return

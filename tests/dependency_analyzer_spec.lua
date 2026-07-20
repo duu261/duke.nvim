@@ -62,6 +62,90 @@ describe("Dependency analyzer", function()
     }, analyzer.paths(analysis, "org.example:leaf", "com.acme:a"))
   end)
 
+  it("detects raw requested drift even when Maven selects one version", function()
+    local first = module("com.acme:a", "1.0.0", "3.0.0")
+    local second = module("com.acme:b", "2.0.0", "3.0.0")
+
+    local analysis = analyzer.analyze({ modules = { first, second } })
+
+    assert.equals(1, #analysis.findings.drift)
+    assert.same({ "1.0.0", "2.0.0" }, analysis.findings.drift[1].versions)
+  end)
+
+  it("does not report a resolved property as mediated", function()
+    local item = module("com.acme:a", "${slf4j.version}", "2.0.17")
+    item.model.dependencies = { item.model.dependencies[1] }
+    item.model.properties = {
+      ["slf4j.version"] = { value = "2.0.17", consumers = { "org.slf4j:slf4j-api" } },
+    }
+    item.resolved.effective.dependencies = {
+      { coordinate = "org.slf4j:slf4j-api", version = "2.0.17" },
+    }
+    local analysis = analyzer.analyze({ modules = { item } })
+    local findings = analyzer.repairable(analysis, {
+      ["com.acme:a\0org.slf4j:slf4j-api"] = {
+        kind = "property",
+        coordinate = "org.slf4j:slf4j-api",
+        selected_version = "2.0.17",
+        requested_version = "2.0.17",
+        property = "slf4j.version",
+        pom_path = "/repo/pom.xml",
+        line = 3,
+        writable = true,
+      },
+    }, {})
+
+    assert.is_nil(vim.iter(findings):find(function(finding)
+      return finding.kind == "mediated_version"
+    end))
+  end)
+
+  it("proves exclusion repairability from the direct introduction edge", function()
+    local analysis = {
+      findings = {
+        conflicts = {
+          {
+            coordinate = "com.acme:legacy",
+            module_id = "com.acme:app",
+            omitted = "1.0.0",
+            selected = "2.0.0",
+            path = { "com.acme:app", "com.acme:starter", "com.acme:legacy" },
+          },
+        },
+      },
+      dependencies = {
+        {
+          coordinate = "com.acme:starter",
+          module_id = "com.acme:app",
+          direct = true,
+          pom_path = "/repo/pom.xml",
+          raw_owner = { coordinate = "com.acme:starter", start_line = 8 },
+          raw_owner_count = 1,
+        },
+      },
+      paths = {},
+    }
+    local findings = analyzer.repairable(analysis, {
+      ["com.acme:app\0com.acme:legacy"] = {
+        kind = "unknown",
+        coordinate = "com.acme:legacy",
+        writable = false,
+        blocked_reason = "effective origin unavailable",
+      },
+    }, {})
+
+    assert.is_true(findings[1].repairable)
+    assert.is_true(findings[1].repair_actions.exclude)
+    assert.is_false(findings[1].repair_actions.upgrade)
+    assert.same({
+      module_id = "com.acme:app",
+      direct_coordinate = "com.acme:starter",
+      pom_path = "/repo/pom.xml",
+      line = 8,
+      writable = true,
+    }, findings[1].exclusion)
+  end)
+
   it("normalizes repair evidence with unique deterministic IDs", function()
     local analysis = {
       findings = {

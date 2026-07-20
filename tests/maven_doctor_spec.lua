@@ -33,6 +33,10 @@ describe("Maven Doctor reports", function()
       enrich = function(input, _, callback)
         callback(nil, vim.deepcopy(input))
       end,
+      read_output = function(path)
+        local ok, lines = pcall(vim.fn.readfile, path)
+        return ok and lines or nil, ok and nil or lines
+      end,
     }
     package.loaded["duke.build"] = {
       maven = function()
@@ -146,6 +150,28 @@ describe("Maven Doctor reports", function()
     assert.same({}, result.analysis.doctor.active_profiles)
     assert.same({ "active profiles unavailable" }, result.analysis.doctor.warnings)
     assert.matches("offline", logs[1].message)
+  end)
+
+  it("rejects oversized active-profile output before reading it", function()
+    package.loaded["duke.maven_model"].read_output = function()
+      return nil, "Maven inspection output exceeds size limit"
+    end
+    package.loaded["duke.maven_doctor"] = nil
+    doctor = require("duke.maven_doctor")
+    local result
+
+    doctor.inspect(snapshot(), {}, function(err, value)
+      assert.is_nil(err)
+      result = value
+    end)
+
+    assert.is_true(vim.wait(100, function()
+      return result ~= nil
+    end))
+    assert.equals("partial", result.state)
+    assert.same({ "active profiles output unavailable" }, result.analysis.doctor.warnings)
+    assert.matches("exceeds size limit", logs[1].message)
+    assert.is_nil(vim.uv.fs_stat(calls[1].args[5]:sub(10)))
   end)
 
   it("runs dependency analysis only when deep is requested", function()

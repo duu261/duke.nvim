@@ -930,7 +930,7 @@ diagnose = function(deep)
   center.doctor.error = nil
   render(center.snapshot)
   require("duke.api").diagnose_workspace(
-    { path = center.path, deep = deep == true },
+    { path = center.path, resolve = true, deep = deep == true },
     guarded("Doctor completion", function(err, diagnosis)
       if
         not valid_buffer()
@@ -980,7 +980,7 @@ local function stage_upgrade(node)
     plan_upgrades(node)
     return
   end
-  if not finding.repairable then
+  if not finding.repairable or (finding.repair_actions and not finding.repair_actions.upgrade) then
     vim.notify("duke.nvim: " .. tostring(finding.blocked_reason or "finding is not repairable"))
     return
   end
@@ -1010,6 +1010,10 @@ local function stage_exclusion(node)
   end
   if finding.kind ~= "version_conflict" or #(finding.paths or {}) == 0 then
     vim.notify("duke.nvim: selected finding has no excludable dependency path")
+    return
+  end
+  if finding.repair_actions and not finding.repair_actions.exclude then
+    vim.notify("duke.nvim: selected finding has no proven direct exclusion owner")
     return
   end
   local choices = {}

@@ -283,6 +283,91 @@ describe("reactor repair plans", function()
     })
   end)
 
+  it("plans an exclusion from proven direct-path evidence", function()
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    directories[#directories + 1] = root
+    local pom_path = vim.fs.joinpath(root, "pom.xml")
+    local lines = {
+      "<project>",
+      "  <modelVersion>4.0.0</modelVersion>",
+      "  <groupId>com.acme</groupId>",
+      "  <artifactId>app</artifactId>",
+      "  <version>1.0.0</version>",
+      "  <dependencies>",
+      "    <dependency>",
+      "      <groupId>com.acme</groupId>",
+      "      <artifactId>starter</artifactId>",
+      "      <version>1.0.0</version>",
+      "    </dependency>",
+      "  </dependencies>",
+      "</project>",
+    }
+    vim.fn.writefile(lines, pom_path)
+    local plans = require("duke.reactor_plan")
+    local diagnosis = assert(plans.capture({
+      root = root,
+      kind = "maven",
+      state = "resolved",
+      modules = {
+        {
+          id = "com.acme:app",
+          build_file = pom_path,
+          model = assert(require("duke.pom").model(lines)),
+        },
+      },
+      analysis = {
+        doctor = { active_profiles = {}, warnings = {}, deep = false },
+        findings = {
+          {
+            id = "version_conflict:com.acme:legacy",
+            kind = "version_conflict",
+            severity = "warning",
+            coordinate = "com.acme:legacy",
+            module_id = "com.acme:app",
+            paths = { { "com.acme:app", "com.acme:starter", "com.acme:legacy" } },
+            repairable = true,
+            repair_actions = { exclude = true, upgrade = false },
+            ownership = {
+              kind = "unknown",
+              coordinate = "com.acme:legacy",
+              writable = false,
+              blocked_reason = "effective origin unavailable",
+            },
+            exclusion = {
+              module_id = "com.acme:app",
+              direct_coordinate = "com.acme:starter",
+              pom_path = pom_path,
+              line = 8,
+              writable = true,
+            },
+          },
+        },
+      },
+    }))
+
+    assert.is_true(diagnosis.findings[1].repair_actions.exclude)
+    local err, descriptor = wait_call(function(callback)
+      plans.build({
+        diagnosis_id = diagnosis.id,
+        repairs = {
+          {
+            finding_id = diagnosis.findings[1].id,
+            action = "exclude",
+            path_index = 1,
+          },
+        },
+      }, callback)
+    end)
+
+    assert.is_nil(err)
+    assert.same({
+      kind = "exclude",
+      direct_coordinate = "com.acme:starter",
+      excluded_coordinate = "com.acme:legacy",
+    }, descriptor.preview.files[1].changes[1])
+  end)
+
   it("rejects stale files without an event", function()
     local _, pom_path, _, snapshot = fixture()
     local event_count = 0

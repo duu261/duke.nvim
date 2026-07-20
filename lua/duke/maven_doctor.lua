@@ -189,13 +189,13 @@ function M.inspect(snapshot, opts, callback)
         add_warning(enriched, "active profiles unavailable")
         log.add("ERROR", "Maven Doctor active profiles failed: " .. message)
       else
-        local lines, read_err = pcall(vim.fn.readfile, path)
+        local lines, read_err = maven_model.read_output(path)
         cleanup(path)
         if not lines then
           add_warning(enriched, "active profiles output unavailable")
           log.add("ERROR", "Maven Doctor active profiles output failed: " .. tostring(read_err))
         else
-          enriched.analysis.doctor.active_profiles = parse_active_profiles(read_err)
+          enriched.analysis.doctor.active_profiles = parse_active_profiles(lines)
         end
       end
 

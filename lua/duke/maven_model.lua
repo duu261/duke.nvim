@@ -293,5 +293,6 @@ end
 
 M.EFFECTIVE_GOAL = EFFECTIVE_GOAL
 M.TREE_GOAL = TREE_GOAL
+M.read_output = read_lines
 
 return M

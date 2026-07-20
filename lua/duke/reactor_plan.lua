@@ -151,6 +151,7 @@ local function public_finding(finding, root)
     paths = vim.deepcopy(finding.paths or {}),
     consumers = vim.deepcopy(finding.consumers or {}),
     repairable = finding.repairable == true,
+    repair_actions = vim.deepcopy(finding.repair_actions or {}),
     blocked_reason = redacted_text(finding.blocked_reason, root),
     ownership = public_ownership(finding.ownership, root),
   }
@@ -212,6 +213,16 @@ function M.capture(snapshot, opts)
           owner.pom_path = path
         end
       end
+    end
+    if finding.exclusion then
+      local path, path_err = canonical_file(finding.exclusion.pom_path)
+      if not path then
+        return nil, path_err
+      end
+      if not modules[path] then
+        return nil, "exclusion owner is not a reactor module POM"
+      end
+      finding.exclusion.pom_path = path
     end
     finding_ids[finding.id] = vim.deepcopy(finding)
     public_findings[#public_findings + 1] = public_finding(finding, root)
@@ -275,13 +286,17 @@ local function selected_repairs(diagnosis, requested)
       return nil, "duplicate repair finding ID"
     end
     seen[finding.id] = true
-    if not finding.repairable or type(finding.ownership) ~= "table" then
-      return nil, finding.blocked_reason or "finding is not repairable"
-    end
     if selection.action == "exclude" then
       local path_value = finding.paths and finding.paths[selection.path_index or 0]
       local direct = path_value and path_value[2]
-      if finding.kind ~= "version_conflict" or not direct then
+      local exclusion = finding.exclusion
+      if
+        finding.kind ~= "version_conflict"
+        or not direct
+        or type(exclusion) ~= "table"
+        or exclusion.writable ~= true
+        or exclusion.direct_coordinate ~= direct
+      then
         return nil, "exclusion requires a valid dependency path"
       end
       local repair = {
@@ -289,13 +304,20 @@ local function selected_repairs(diagnosis, requested)
         direct_coordinate = direct,
         excluded_coordinate = finding.coordinate,
       }
-      local path = diagnosis.modules_by_id[finding.module_id]
-      if not path then
+      local path = exclusion.pom_path
+      if not path or diagnosis.modules_by_id[finding.module_id] ~= path then
         return nil, "exclusion module is not in the reactor"
       end
       grouped[path] = grouped[path] or {}
       grouped[path][#grouped[path] + 1] = repair
     elseif type(selection.new_version) == "string" and selection.new_version ~= "" then
+      if
+        type(finding.ownership) ~= "table"
+        or finding.ownership.writable ~= true
+        or (finding.repair_actions and finding.repair_actions.upgrade ~= true)
+      then
+        return nil, finding.blocked_reason or "finding has no writable version owner"
+      end
       local targets = finding.ownership.kind == "reactor_alignment" and finding.ownership.owners
         or { finding.ownership }
       if type(targets) ~= "table" or #targets == 0 then

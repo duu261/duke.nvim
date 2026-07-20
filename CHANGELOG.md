@@ -20,6 +20,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Fixed
 
+- Maven Doctor now requires explicit headless resolution consent, detects requested-version drift independently from Maven's selected version, avoids false property-mediation findings, proves exclusions from their direct introduction edge, and bounds active-profile output before reading it.
 - Maven effective-POM and dependency-tree inspection now run non-recursively per reactor module, preventing aggregated root output from being parsed as one mislabeled module.
 - Coordinate-form Maven origins from non-reactor parents are classified explicitly as read-only external ownership.
 - Multiline Maven failures now render safely in `:DukeLog`.
