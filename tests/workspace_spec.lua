@@ -173,6 +173,46 @@ describe("Java workspace discovery", function()
     assert.same({ findings = {} }, result.analysis)
   end)
 
+  it("records the scoped runner selected for resolved inspection", function()
+    local root = temp_dir()
+    write(vim.fs.joinpath(root, "pom.xml"), pom("com.acme", "app"))
+    package.loaded["duke.java"] = {
+      active = function()
+        return "21"
+      end,
+      discover_homes = function()
+        return { { version = "23", home = "/opt/jdk-23" } }
+      end,
+      installed = function()
+        return { "23" }
+      end,
+      default = function()
+        return "23"
+      end,
+      runner_env = function()
+        return { JAVA_HOME = "/opt/jdk-23" }
+      end,
+    }
+    package.loaded["duke.maven_model"] = {
+      enrich = function(snapshot, _, callback)
+        snapshot.state = "resolved"
+        callback(nil, snapshot)
+      end,
+    }
+    package.loaded["duke.dependency_analyzer"] = {
+      analyze = function()
+        return { findings = {} }
+      end,
+    }
+
+    local err, result = inspect({ path = root, resolve = true })
+
+    assert.is_nil(err)
+    assert.equals("23", result.environment.runner_java_version)
+    assert.equals("/opt/jdk-23", result.environment.runner_java_home)
+    package.loaded["duke.java"] = nil
+  end)
+
   it("enriches Gradle only when resolve is explicit", function()
     local root = temp_dir()
     write(vim.fs.joinpath(root, "settings.gradle.kts"), { 'rootProject.name = "demo"' })

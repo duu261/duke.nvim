@@ -4,6 +4,19 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+### Added
+
+- Project Center now exposes resolved Maven ownership, consumers, findings, paths, exact declaration navigation, and resolved Gradle dependency rows in read-only detail buffers.
+- Contextual `a`, `u`, `x`, `p`, and `g` actions reuse Duke's existing Maven workflows for the selected module or dependency.
+
+### Changed
+
+- Project Center now shows available workspace, wrapper, Java target, scoped runner JVM, Spring Boot, Gradle, toolchain, and exact-root JDTLS state. Its latest session snapshot survives close and reopen, invalidates after an owned build-file write, and rejects stale refresh completion.
+
+### Fixed
+
+- Maven effective-POM inspection now runs non-recursively per reactor module, preventing an aggregated root `<projects>` document from degrading otherwise valid workspace resolution to partial state.
+
 ## 0.10.0 - 2026-07-20
 
 ### Added

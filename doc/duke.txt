@@ -449,17 +449,22 @@ then choose [Done - N selected]. Both paths show the current selection count.
     Open Project Center when the current buffer or cwd belongs to a Maven or
     Gradle workspace. Otherwise open grouped command help.
 
-    Project Center renders local modules, direct dependencies, Spring
-    configuration filenames, and diagnostics without running a build tool.
-    After explicit Maven resolution, direct dependencies show selected
-    versions, including parent-managed versions. The sidebar also summarizes
-    resolved nodes, transitive dependencies, conflicts, version drift, and
-    duplicate declarations.
+    Project Center renders workspace, dependency, configuration, environment,
+    and diagnostic groups without running a build tool. Explicit resolution
+    adds Maven ownership, consumers, paths, conflicts, drift, duplicates, and
+    unknown ownership, or Gradle projects, Java targets, selected dependency
+    versions, configurations, and paths. Selecting evidence opens a read-only
+    detail buffer. Environment rows show only available wrapper, build-tool,
+    Java, Spring Boot, toolchain, and exact-root JDTLS evidence.
     Keys are:
 
-      <CR>  Open module build file or Spring configuration.
+      <CR>  Open a module, file, declaration, or read-only detail.
       r     Explicitly resolve through Maven or Gradle wrapper reports.
-      u     Plan upgrades for the active Maven module.
+      a     Start dependency add for the selected Maven module.
+      u     Plan upgrades for the selected Maven dependency or module.
+      x     Start confirmed removal for the selected Maven module.
+      p     Show known paths or start Maven why-path resolution.
+      g     Jump to the owning declaration.
       /     Search visible nodes through Telescope or vim.ui.
       ?     Show Project Center help.
       q     Close.
@@ -467,6 +472,8 @@ then choose [Done - N selected]. Both paths show the current selection count.
     Spring discovery returns paths, filename-proven profiles, formats, and
     scopes only. Configuration values are never returned or rendered. The
     sidebar preserves current code window, buffer, cwd, and unsaved state.
+    Reopening preserves the latest session snapshot. An owned build-file write
+    invalidates it, and stale refresh completion cannot replace newer data.
 
                                                       *:DukeNew*
 :DukeNew

@@ -83,12 +83,13 @@ describe("Maven workspace enrichment", function()
     assert.equals("/workspace/mvnw", calls[1].command)
     assert.same({
       "-q",
+      "-N",
       "-f",
       "/workspace/app/pom.xml",
       "org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom",
-      calls[1].args[5],
+      calls[1].args[6],
     }, calls[1].args)
-    assert.matches("^%-Doutput=", calls[1].args[5])
+    assert.matches("^%-Doutput=", calls[1].args[6])
     assert.same({
       "-q",
       "-f",
@@ -101,7 +102,7 @@ describe("Maven workspace enrichment", function()
     assert.matches("^%-DoutputFile=", calls[2].args[7])
     assert.equals(5000, calls[1].opts.timeout)
     assert.equals(1, #results[1].result.modules[1].resolved.tree.children)
-    assert.is_nil(vim.uv.fs_stat(calls[1].args[5]:sub(10)))
+    assert.is_nil(vim.uv.fs_stat(calls[1].args[6]:sub(10)))
     assert.is_nil(vim.uv.fs_stat(calls[2].args[7]:sub(14)))
   end)
 

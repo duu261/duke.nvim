@@ -269,6 +269,10 @@ end
 local function resolution_options(opts, kind)
   local resolved = vim.deepcopy(opts)
   if resolved.env then
+    resolved.runner_java_home = resolved.env.JAVA_HOME
+    if resolved.runner_java_version and resolved.runner_java_version ~= "auto" then
+      resolved.selected_runner_java_version = resolved.runner_java_version
+    end
     return resolved
   end
   local config = require("duke.config").get()
@@ -282,6 +286,8 @@ local function resolution_options(opts, kind)
   local requested = opts.runner_java_version or tool.runner_java_version
   local selected = java.default(requested, versions, runtimes.active)
   resolved.env = java.runner_env(selected, config.java_homes, runtimes.homes)
+  resolved.selected_runner_java_version = selected
+  resolved.runner_java_home = resolved.env and resolved.env.JAVA_HOME or nil
   resolved.timeout = opts.timeout or tool.timeout
   resolved[kind .. "_command"] = opts[kind .. "_command"] or tool.command
   return resolved
@@ -331,6 +337,8 @@ function M.inspect(opts, callback)
     local adapter = result.kind == "maven" and require("duke.maven_model")
       or require("duke.gradle_model")
     local adapter_opts = resolution_options(opts, result.kind)
+    result.environment.runner_java_version = adapter_opts.selected_runner_java_version
+    result.environment.runner_java_home = adapter_opts.runner_java_home
     adapter.enrich(result, adapter_opts, function(resolve_err, enriched)
       if current_generation ~= generation then
         finish("workspace inspection superseded by a newer refresh")

@@ -73,7 +73,11 @@ end
 local function run_goal(module, goal, output_argument, opts, callback)
   local selected = build.maven(module.build_file, opts.maven_command or "mvn")
   local path = output_path()
-  local args = { "-q", "-f", module.build_file, goal }
+  local args = { "-q" }
+  if goal == EFFECTIVE_GOAL then
+    args[#args + 1] = "-N"
+  end
+  vim.list_extend(args, { "-f", module.build_file, goal })
   if goal == TREE_GOAL then
     args[#args + 1] = "-DoutputType=json"
     args[#args + 1] = "-Dverbose"
