@@ -23,6 +23,8 @@ describe("Java Project Center", function()
     vim.cmd("silent! only")
     vim.cmd("silent! enew!")
     package.loaded["duke.project_center"] = nil
+    package.loaded["duke.log"] = nil
+    package.loaded["duke.picker"] = nil
     package.loaded["duke.workspace"] = nil
     project_center = require("duke.project_center")
     root = vim.fn.tempname()
@@ -171,6 +173,18 @@ describe("Java Project Center", function()
     assert.matches("Conflicts  0", rendered)
     assert.matches("Version drift  0", rendered)
     assert.matches("Duplicate declarations  0", rendered)
+
+    local searched = {}
+    package.loaded["duke.picker"] = {
+      select_one = function(items, _, callback)
+        for _, item in ipairs(items) do
+          searched[#searched + 1] = item.label
+        end
+        callback(nil)
+      end,
+    }
+    press(state, 1, "/")
+    assert.is_true(vim.tbl_contains(searched, "com.acme:transitive"))
   end)
 
   it("renders partial Gradle diagnostics as single lines", function()
@@ -279,6 +293,7 @@ describe("Java Project Center", function()
     local rendered = table.concat(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false), "\n")
     assert.is_truthy(rendered:find("Workspace", 1, true))
     assert.is_truthy(rendered:find("active  gradle:sample", 1, true))
+    assert.is_truthy(rendered:find("  * gradle:sample", 1, true))
     assert.is_truthy(rendered:find("Environment", 1, true))
     assert.is_truthy(rendered:find("Gradle projects (2)", 1, true))
     assert.is_truthy(rendered:find(":app  app", 1, true))
@@ -510,6 +525,62 @@ describe("Java Project Center", function()
     assert.equals("resolved", project_center.state().snapshot.state)
   end)
 
+  it("shows refresh failure context, opens DukeLog, and retries", function()
+    local inspections = 0
+    local log_entries = {}
+    local log_opened = 0
+    package.loaded["duke.log"] = {
+      add = function(level, message)
+        log_entries[#log_entries + 1] = level .. ":" .. message
+      end,
+      show = function()
+        log_opened = log_opened + 1
+      end,
+    }
+    package.loaded["duke.workspace"] = {
+      inspect = function(_, callback)
+        inspections = inspections + 1
+        if inspections == 2 then
+          callback("mvn failed\nfull process detail")
+          return
+        end
+        callback(nil, {
+          root = root,
+          state = inspections == 1 and "local" or "resolved",
+          kind = "maven",
+          active_module = "com.acme:app",
+          modules = {
+            { id = "com.acme:app", build_file = vim.fs.joinpath(root, "pom.xml") },
+          },
+          dependencies = {},
+          configuration = {},
+          diagnostics = {},
+          environment = {},
+        })
+      end,
+    }
+    package.loaded["duke.project_center"] = nil
+    project_center = require("duke.project_center")
+    project_center.toggle({ path = root })
+    local state = project_center.state()
+
+    press(state, 1, "r")
+    local failed = table.concat(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false), "\n")
+    assert.is_truthy(failed:find("failed", 1, true))
+    assert.is_truthy(failed:find("mvn failed", 1, true))
+    assert.is_falsy(failed:find("full process detail", 1, true))
+    assert.is_truthy(failed:find("r to retry", 1, true))
+    assert.is_truthy(failed:find("l for :DukeLog", 1, true))
+    assert.is_truthy(failed:find("com.acme:app", 1, true))
+    assert.same({ "ERROR:mvn failed\nfull process detail" }, log_entries)
+
+    press(state, 1, "l")
+    assert.equals(1, log_opened)
+    press(state, 1, "r")
+    assert.equals(3, inspections)
+    assert.equals("resolved", project_center.state().snapshot.state)
+  end)
+
   it("invalidates a cached resolved snapshot after its build file is written", function()
     local inspections = 0
     package.loaded["duke.workspace"] = {
@@ -561,6 +632,7 @@ describe("Java Project Center", function()
     assert.matches("x     Remove dependencies", help)
     assert.matches("p     Show dependency paths", help)
     assert.matches("g     Jump to the owning declaration", help)
+    assert.matches("l     Open :DukeLog", help)
     vim.cmd.close()
   end)
 end)

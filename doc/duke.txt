@@ -463,13 +463,14 @@ then choose [Done - N selected]. Both paths show the current selection count.
     Keys are:
 
       <CR>  Open a module, file, declaration, or read-only detail.
-      r     Explicitly resolve through Maven or Gradle wrapper reports.
+      r     Explicitly resolve or retry through Maven or Gradle reports.
       a     Start dependency add for the selected Maven module.
       u     Plan upgrades for the selected Maven dependency or module.
       x     Start confirmed removal for the selected Maven module.
       p     Show known paths or start Maven why-path resolution.
       g     Jump to the owning declaration.
-      /     Search visible nodes through Telescope or vim.ui.
+      /     Search visible declarations and resolved dependency nodes.
+      l     Open :DukeLog.
       ?     Show Project Center help.
       q     Close.
 
@@ -478,6 +479,8 @@ then choose [Done - N selected]. Both paths show the current selection count.
     sidebar preserves current code window, buffer, cwd, and unsaved state.
     Reopening preserves the latest session snapshot. An owned build-file write
     invalidates it, and stale refresh completion cannot replace newer data.
+    Failed refresh keeps that visible data, shows a concise reason, and offers
+    r to retry or l for full log detail. Active modules carry a * marker.
 
                                                       *:DukeNew*
 :DukeNew

@@ -13,6 +13,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 - Project Center now shows available workspace, wrapper, Java target, scoped runner JVM, Spring Boot, Gradle, toolchain, and exact-root JDTLS state. Its latest session snapshot survives close and reopen, invalidates after an owned build-file write, and rejects stale refresh completion.
 - `:DukeOutdated` and `duke.outdated()` now inspect safe direct-root dependency properties. `:DukeUpgrade` updates them through canonical plans, showing every shared-property consumer before apply; headless `duke.upgrade()` refuses shared impact and directs callers to the plan API.
+- Project Center refresh failures now preserve visible snapshot data with concise retry and `:DukeLog` actions. Active modules are marked, and search includes resolved transitive dependencies.
 
 ### Fixed
 

@@ -102,6 +102,12 @@ local function render(snapshot, status)
     snapshot and snapshot.root or center.path,
     "",
   }
+  if status == "failed" and center.error then
+    local reason = tostring(center.error):match("^[^\r\n]+") or "workspace inspection failed"
+    lines[#lines + 1] = "error  " .. reason:gsub("%s+", " ")
+    lines[#lines + 1] = "press r to retry; l for :DukeLog"
+    lines[#lines + 1] = ""
+  end
   local nodes = {}
   local function heading(label, count)
     lines[#lines + 1] = count and string.format("%s (%d)", label, count) or label
@@ -133,7 +139,8 @@ local function render(snapshot, status)
     lines[#lines + 1] = ""
     heading("Modules", #(snapshot.modules or {}))
     for _, module in ipairs(snapshot.modules or {}) do
-      node(module.id, {
+      local marker = module.id == snapshot.active_module and "* " or ""
+      node(marker .. module.id, {
         kind = "module",
         label = module.id,
         module_id = module.id,
@@ -344,7 +351,7 @@ local function render(snapshot, status)
   end
   lines[#lines + 1] = ""
   lines[#lines + 1] = "<CR> open  r resolve  a add  u upgrade  x remove  p paths  "
-    .. "g declaration  / search  ? help  q close"
+    .. "g declaration  / search  l log  ? help  q close"
 
   vim.bo[center.buf].modifiable = true
   vim.api.nvim_buf_set_lines(center.buf, 0, -1, false, lines)
@@ -482,6 +489,7 @@ local function refresh(resolve)
   end
   center.generation = center.generation + 1
   local generation = center.generation
+  center.error = nil
   render(center.snapshot, resolve and "resolving" or "loading")
   require("duke.workspace").inspect(
     { path = center.path, resolve = resolve },
@@ -490,10 +498,12 @@ local function refresh(resolve)
         return
       end
       if err then
+        center.error = err
         render(center.snapshot, "failed")
         require("duke.log").add("ERROR", err)
         return
       end
+      center.error = nil
       center.snapshot = snapshot
       latest = { path = center.path, snapshot = vim.deepcopy(snapshot) }
       render(snapshot)
@@ -575,6 +585,7 @@ local function show_help()
     "p     Show dependency paths",
     "g     Jump to the owning declaration",
     "/     Search visible project nodes",
+    "l     Open :DukeLog",
     "?     Show this help",
     "q     Close Project Center",
   }
@@ -598,7 +609,9 @@ end
 local function search_nodes()
   local choices = {}
   for _, node in pairs(center.nodes or {}) do
-    choices[#choices + 1] = node
+    if type(node.label) == "string" and node.label ~= "" then
+      choices[#choices + 1] = node
+    end
   end
   table.sort(choices, function(left, right)
     return left.label < right.label
@@ -782,6 +795,7 @@ local function set_keymaps(buf)
   )
   vim.keymap.set("n", "?", guarded("help", show_help), opts)
   vim.keymap.set("n", "/", guarded("search", search_nodes), opts)
+  vim.keymap.set("n", "l", guarded("log", require("duke.log").show), opts)
 end
 
 function M.toggle(opts)
