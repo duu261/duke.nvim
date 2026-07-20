@@ -201,6 +201,7 @@ local function dependency_structure(lines)
         if node.field == "version" then
           local leading = content:match("^(%s*)") or ""
           local trailing = content:match("(%s*)$") or ""
+          node.dependency.version_line = node.start_line
           node.dependency._version_start = node.content_start + #leading
           node.dependency._version_end = position - 1 - #trailing
         end
@@ -285,6 +286,152 @@ local function dependency_structure(lines)
     return nil, "pom.xml has unclosed elements"
   end
   return dependencies
+end
+
+local function ownership_structure(lines)
+  local raw_xml = table.concat(lines, "\n")
+  local xml = mask_comments(raw_xml)
+  local full_xml = strip_comments(raw_xml)
+  local stack = {}
+  local managed_dependencies = {}
+  local profile_ranges = {}
+  local line_number = 1
+  local previous_position = 1
+
+  for position, closing, qualified_name, attributes, finish in
+    xml:gmatch("()<(%/?)([%w_:.-]+)([^>]*)>()")
+  do
+    local _, newlines = xml:sub(previous_position, position - 1):gsub("\n", "\n")
+    line_number = line_number + newlines
+    previous_position = position
+
+    local name = qualified_name:match("([^:]+)$")
+    if closing == "/" then
+      local node = stack[#stack]
+      if not node or node.name ~= name then
+        return nil, nil, "malformed pom.xml element nesting"
+      end
+      table.remove(stack)
+
+      if node.field then
+        local content = raw_xml:sub(node.content_start, position - 1)
+        if mask_comments(content):find("<", 1, true) then
+          return nil, nil, "nested XML in managed dependency " .. node.field .. " is not supported"
+        end
+        local value = content:match("^%s*(.-)%s*$")
+        if not value or value == "" then
+          return nil, nil, "empty managed dependency " .. node.field .. " is not supported"
+        end
+        if node.target[node.field] ~= nil then
+          return nil, nil, "duplicate managed dependency " .. node.field .. " is not supported"
+        end
+        node.target[node.field] = value
+        if node.field == "version" then
+          local leading = content:match("^(%s*)") or ""
+          local trailing = content:match("(%s*)$") or ""
+          node.target.version_line = node.start_line
+          node.target._version_start = node.content_start + #leading
+          node.target._version_end = position - 1 - #trailing
+        end
+      elseif node.kind == "managed_dependency" then
+        if node.start_line == line_number then
+          return nil, nil, "compact managed dependency XML is not supported"
+        end
+        if not node.group_id or not node.artifact_id then
+          return nil, nil, "managed dependency is missing groupId or artifactId"
+        end
+        node.end_line = line_number
+        node._end_byte = finish - 1
+        node.group_id = resolve_property(full_xml, node.group_id)
+        node.artifact_id = resolve_property(full_xml, node.artifact_id)
+        if not node.group_id or not node.artifact_id then
+          return nil, nil, "managed dependency coordinate property cannot be resolved"
+        end
+        node.kind = "dependency_management"
+        node.coordinate = node.group_id .. ":" .. node.artifact_id
+        node.managed = true
+        node.imported_bom = node.type == "pom" and node.scope == "import"
+        managed_dependencies[#managed_dependencies + 1] = node
+      elseif node.kind == "profile" then
+        profile_ranges[#profile_ranges + 1] = {
+          id = node.id,
+          start_line = node.start_line,
+          end_line = line_number,
+        }
+      elseif node.kind == "profile_id" then
+        local content = raw_xml:sub(node.content_start, position - 1)
+        node.profile.id = content:match("^%s*(.-)%s*$")
+      end
+    else
+      local parent = stack[#stack]
+      local self_closing = attributes:match("/%s*$") ~= nil
+      local kind
+      if name == "project" and not parent then
+        kind = "project"
+      elseif name == "dependencyManagement" and parent and parent.kind == "project" then
+        kind = "root_dependency_management"
+      elseif name == "dependencies" and parent and parent.kind == "root_dependency_management" then
+        kind = "managed_dependencies"
+      elseif name == "dependency" and parent and parent.kind == "managed_dependencies" then
+        kind = "managed_dependency"
+      elseif name == "profiles" and parent and parent.kind == "project" then
+        kind = "profiles"
+      elseif name == "profile" and parent and parent.kind == "profiles" then
+        kind = "profile"
+      elseif name == "id" and parent and parent.kind == "profile" then
+        kind = "profile_id"
+      end
+
+      if
+        kind
+        and self_closing
+        and kind ~= "profiles"
+        and kind ~= "profile"
+        and kind ~= "profile_id"
+      then
+        return nil, nil, "self-closing " .. name .. " element is not supported"
+      end
+      if kind == "profile" and self_closing then
+        profile_ranges[#profile_ranges + 1] = {
+          start_line = line_number,
+          end_line = line_number,
+        }
+      end
+      if not self_closing then
+        local node = {
+          name = name,
+          kind = kind,
+          start_line = line_number,
+          content_start = finish,
+          _start_byte = position,
+        }
+        if
+          parent
+          and parent.kind == "managed_dependency"
+          and (
+            name == "groupId"
+            or name == "artifactId"
+            or name == "version"
+            or name == "scope"
+            or name == "type"
+            or name == "classifier"
+          )
+        then
+          node.field = name == "groupId" and "group_id"
+            or (name == "artifactId" and "artifact_id" or name)
+          node.target = parent
+        elseif kind == "profile_id" then
+          node.profile = parent
+        end
+        stack[#stack + 1] = node
+      end
+    end
+  end
+
+  if #stack > 0 then
+    return nil, nil, "pom.xml has unclosed elements"
+  end
+  return managed_dependencies, profile_ranges
 end
 
 function M.list(lines)
@@ -958,7 +1105,6 @@ function M.dependency_version_sources(lines, dependencies)
   if not properties then
     return nil, properties_err
   end
-
   for _, dependency in ipairs(dependencies) do
     local property_name = dependency.version and dependency.version:match("^%${([%w_.-]+)}$")
     local property = property_name and properties[property_name] or nil
@@ -1011,6 +1157,10 @@ function M.model(lines)
   if not properties then
     return nil, properties_err
   end
+  local managed_dependencies, profile_ranges, ownership_err = ownership_structure(lines)
+  if not managed_dependencies then
+    return nil, ownership_err
+  end
 
   local project = fields.project
   local parent = fields.parent
@@ -1041,8 +1191,14 @@ function M.model(lines)
     return nil, "property-backed project packaging is not supported"
   end
 
-  for _, dependency in ipairs(dependencies) do
+  local versioned_declarations = {}
+  vim.list_extend(versioned_declarations, dependencies)
+  vim.list_extend(versioned_declarations, managed_dependencies)
+  for _, dependency in ipairs(versioned_declarations) do
     dependency.kind = "dependency"
+    if dependency.managed then
+      dependency.kind = "dependency_management"
+    end
     dependency.coordinate = dependency.group_id .. ":" .. dependency.artifact_id
     local property_name = dependency.version and dependency.version:match("^%${([%w_.-]+)}$")
     if property_name and properties[property_name] then
@@ -1059,7 +1215,7 @@ function M.model(lines)
   for _, property in pairs(properties) do
     table.sort(property.consumers)
   end
-  annotate_property_uses(lines, properties, dependencies)
+  annotate_property_uses(lines, properties, versioned_declarations)
 
   return {
     coordinates = {
@@ -1070,7 +1226,9 @@ function M.model(lines)
     packaging = packaging,
     modules = modules.module_entries,
     dependencies = dependencies,
+    dependency_management = managed_dependencies,
     properties = properties,
+    profile_ranges = profile_ranges,
     spring_boot_version = M.spring_boot_version(lines),
   }
 end

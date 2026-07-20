@@ -335,6 +335,81 @@ describe("POM editing", function()
     assert.is_number(dependencies[1].end_line)
   end)
 
+  it("models root dependency management and read-only profile ranges", function()
+    local lines = {
+      "<project>",
+      "  <groupId>com.acme</groupId>",
+      "  <artifactId>app</artifactId>",
+      "  <version>1.0.0</version>",
+      "  <properties>",
+      "    <platform.version>2.0.0</platform.version>",
+      "  </properties>",
+      "  <dependencyManagement>",
+      "    <dependencies>",
+      "      <dependency>",
+      "        <groupId>com.acme</groupId>",
+      "        <artifactId>platform-bom</artifactId>",
+      "        <version>${platform.version}</version>",
+      "        <type>pom</type>",
+      "        <scope>import</scope>",
+      "      </dependency>",
+      "    </dependencies>",
+      "  </dependencyManagement>",
+      "  <profiles>",
+      "    <profile>",
+      "      <id>local-dev</id>",
+      "      <dependencies>",
+      "        <dependency>",
+      "          <groupId>com.acme</groupId>",
+      "          <artifactId>profile-only</artifactId>",
+      "        </dependency>",
+      "      </dependencies>",
+      "    </profile>",
+      "  </profiles>",
+      "</project>",
+    }
+
+    local model = assert(pom.model(lines))
+    local managed = model.dependency_management[1]
+
+    assert.same({
+      coordinate = "com.acme:platform-bom",
+      version = "${platform.version}",
+      scope = "import",
+      type = "pom",
+      managed = true,
+      imported_bom = true,
+      start_line = 10,
+      version_line = 13,
+    }, {
+      coordinate = managed.coordinate,
+      version = managed.version,
+      scope = managed.scope,
+      type = managed.type,
+      managed = managed.managed,
+      imported_bom = managed.imported_bom,
+      start_line = managed.start_line,
+      version_line = managed.version_line,
+    })
+    assert.same({ "com.acme:platform-bom" }, model.properties["platform.version"].consumers)
+    assert.same({
+      { id = "local-dev", start_line = 20, end_line = 28 },
+    }, model.profile_ranges)
+  end)
+
+  it("keeps self-closing profile containers read-only and non-fatal", function()
+    local model = assert(pom.model({
+      "<project>",
+      "  <groupId>com.acme</groupId>",
+      "  <artifactId>app</artifactId>",
+      "  <version>1.0.0</version>",
+      "  <profiles/>",
+      "</project>",
+    }))
+
+    assert.same({}, model.profile_ranges)
+  end)
+
   it("rejects compact and self-closing root dependency blocks", function()
     local compact = {
       "<project>",
