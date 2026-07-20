@@ -65,6 +65,7 @@ describe("programmatic API", function()
       "duke.pom_file",
       "duke.project",
       "duke.spring",
+      "duke.workspace",
     }) do
       package.loaded[module] = nil
     end
@@ -86,6 +87,32 @@ describe("programmatic API", function()
     assert.is_function(duke.upgrade_parent)
     assert.is_function(duke.outdated)
     assert.is_function(duke.remove)
+    assert.is_function(duke.inspect)
+  end)
+
+  it("exposes callback-based workspace inspection and validates options", function()
+    package.loaded["duke.workspace"] = {
+      inspect = function(opts, callback)
+        assert.equals("/workspace", opts.path)
+        callback(nil, { state = "local" })
+      end,
+    }
+    local calls = {}
+    require("duke").inspect({ path = "/workspace", resolve = false }, function(err, result)
+      calls[#calls + 1] = { err = err, result = result }
+    end)
+    assert.equals(1, #calls)
+    assert.is_nil(calls[1].err)
+    assert.equals("local", calls[1].result.state)
+
+    local validation
+    require("duke").inspect({ resolve = "yes" }, function(err)
+      validation = err
+    end)
+    assert.is_true(vim.wait(1000, function()
+      return validation ~= nil
+    end))
+    assert.matches("boolean", validation)
   end)
 
   it("rejects invalid creation requests before adapters start", function()

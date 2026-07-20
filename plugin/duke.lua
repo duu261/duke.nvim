@@ -4,8 +4,14 @@ end
 vim.g.loaded_duke = true
 
 vim.api.nvim_create_user_command("Duke", function()
-  require("duke").help()
-end, { desc = "Show duke.nvim commands", force = true })
+  local path = vim.api.nvim_buf_get_name(0)
+  path = path ~= "" and path or vim.fn.getcwd()
+  if require("duke.workspace").can_inspect(path) then
+    require("duke").project_center({ path = path })
+  else
+    require("duke").help()
+  end
+end, { desc = "Open Java Project Center or command help", force = true })
 
 vim.api.nvim_create_user_command("DukeNew", function()
   require("duke").new()

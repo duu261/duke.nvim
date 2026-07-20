@@ -134,6 +134,7 @@ local function inspect_maven(root, input_path)
     for _, dependency in ipairs(loaded.model.dependencies) do
       dependencies[#dependencies + 1] = {
         coordinate = dependency.coordinate,
+        line = dependency.start_line,
         module_id = id,
         scope = dependency.scope,
         version = dependency.version,
@@ -265,6 +266,45 @@ local function inspect_local(opts)
   return "no Maven or Gradle workspace found from " .. path
 end
 
+local function resolution_options(opts, kind)
+  local resolved = vim.deepcopy(opts)
+  if resolved.env then
+    return resolved
+  end
+  local config = require("duke.config").get()
+  local tool = config[kind]
+  local java = require("duke.java")
+  local runtimes = {
+    active = java.active(),
+    homes = java.discover_homes(config.java_homes),
+  }
+  local versions = java.installed(config.java_versions, config.java_homes, runtimes)
+  local requested = opts.runner_java_version or tool.runner_java_version
+  local selected = java.default(requested, versions, runtimes.active)
+  resolved.env = java.runner_env(selected, config.java_homes, runtimes.homes)
+  resolved.timeout = opts.timeout or tool.timeout
+  resolved[kind .. "_command"] = opts[kind .. "_command"] or tool.command
+  return resolved
+end
+
+function M.can_inspect(path)
+  path = path and path ~= "" and path or vim.api.nvim_buf_get_name(0)
+  path = path ~= "" and path or vim.fn.getcwd()
+  path = absolute(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat then
+    return false
+  end
+  local start = stat.type == "directory" and path or vim.fs.dirname(path)
+  return vim.fs.find({
+    "pom.xml",
+    "settings.gradle.kts",
+    "settings.gradle",
+    "build.gradle.kts",
+    "build.gradle",
+  }, { path = start, upward = true })[1] ~= nil
+end
+
 function M.inspect(opts, callback)
   opts = opts or {}
   assert(type(callback) == "function", "workspace callback is required")
@@ -290,7 +330,8 @@ function M.inspect(opts, callback)
     end
     local adapter = result.kind == "maven" and require("duke.maven_model")
       or require("duke.gradle_model")
-    adapter.enrich(result, opts, function(resolve_err, enriched)
+    local adapter_opts = resolution_options(opts, result.kind)
+    adapter.enrich(result, adapter_opts, function(resolve_err, enriched)
       if current_generation ~= generation then
         finish("workspace inspection superseded by a newer refresh")
         return

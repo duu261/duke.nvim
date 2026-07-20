@@ -44,6 +44,15 @@ local function positive_number(value)
   return type(value) == "number" and value > 0
 end
 
+local function inspect_error(callback, message)
+  vim.schedule(function()
+    local ok, err = pcall(callback, message)
+    if not ok then
+      log("ERROR", "programmatic inspect callback failed: " .. tostring(err))
+    end
+  end)
+end
+
 local function absolute(path)
   return vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
 end
@@ -808,6 +817,41 @@ function M.outdated(opts, callback)
   if not ok then
     fail(complete, nil, startup_error)
   end
+end
+
+function M.inspect(opts, callback)
+  if type(callback) ~= "function" then
+    log("ERROR", "programmatic inspect callback must be a function")
+    return
+  end
+  if opts == nil then
+    opts = {}
+  end
+  if type(opts) ~= "table" then
+    inspect_error(callback, "options must be a table")
+    return
+  end
+  if opts.path ~= nil and not non_empty_string(opts.path) then
+    inspect_error(callback, "path must be a non-empty string")
+    return
+  end
+  if opts.resolve ~= nil and type(opts.resolve) ~= "boolean" then
+    inspect_error(callback, "resolve must be a boolean")
+    return
+  end
+  if opts.timeout ~= nil and not positive_number(opts.timeout) then
+    inspect_error(callback, "timeout must be a positive number")
+    return
+  end
+  if
+    opts.runner_java_version ~= nil
+    and opts.runner_java_version ~= "auto"
+    and not numeric_version(opts.runner_java_version)
+  then
+    inspect_error(callback, "runner_java_version must be 'auto' or a numeric version string")
+    return
+  end
+  require("duke.workspace").inspect(opts, callback)
 end
 
 return M

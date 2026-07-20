@@ -33,7 +33,9 @@ describe("plugin surface", function()
     package.loaded["duke.pom_file"] = nil
     package.loaded["duke.project"] = nil
     package.loaded["duke.progress"] = nil
+    package.loaded["duke.project_center"] = nil
     package.loaded["duke.spring"] = nil
+    package.loaded["duke.workspace"] = nil
     vim.cmd.cd(vim.fn.fnameescape(original_cwd))
     for _, path in ipairs(temporary_directories) do
       vim.fn.delete(path, "rf")
@@ -70,6 +72,24 @@ describe("plugin surface", function()
     assert.equals(2, vim.fn.exists(":DukeClearCache"))
     assert.equals(2, vim.fn.exists(":DukeLog"))
     assert.equals(2, vim.fn.exists(":DukeHealth"))
+  end)
+
+  it("opens Project Center from Duke inside a Java workspace", function()
+    local received
+    package.loaded["duke.workspace"] = {
+      can_inspect = function()
+        return true
+      end,
+    }
+    package.loaded["duke"] = {
+      project_center = function(opts)
+        received = opts.path
+      end,
+    }
+
+    vim.cmd("Duke")
+
+    assert.equals(vim.fn.getcwd(), received)
   end)
 
   it("loads public API without setup", function()

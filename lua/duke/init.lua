@@ -1444,6 +1444,7 @@ end
 function M.help()
   render_scratch({
     "Duke commands",
+    "Inside a Maven or Gradle workspace, :Duke opens Project Center.",
     "",
     "Create",
     "  :DukeNew          Choose Maven, Gradle, or Spring Boot",
@@ -1544,6 +1545,14 @@ end
 
 function M.remove(opts, callback)
   require("duke.api").remove(opts, callback)
+end
+
+function M.inspect(opts, callback)
+  require("duke.api").inspect(opts, callback)
+end
+
+function M.project_center(opts)
+  require("duke.project_center").toggle(opts)
 end
 
 return M
