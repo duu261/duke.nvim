@@ -4,12 +4,16 @@
 
 Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Maven dependencies, grow multi-module reactors, then open generated Java source or hand the project to another tool.
 
-> **Built with GPT-5.6 through Codex CLI.** Codex drove implementation and verification of the safe POM mutation engine, dependency lifecycle, multi-module support, and headless API. The human set product direction, guarded scope, and authorized releases. [Read the project story →](PROJECT-STORY.md)
+> **Built with GPT-5.6 through Codex CLI for OpenAI Build Week.** [See how Codex and I collaborated](#built-with-codex).
+
+[Watch the 2:42 demo](https://www.youtube.com/watch?v=FvqIwBG7PMg) | [OpenAI Build Week submission](https://devpost.com/software/duke-nvim)
 
 - [Features](#features)
+- [Built with Codex](#built-with-codex)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Judge testing path](#judge-testing-path)
 - [Commands](#commands)
 - [Configuration](#configuration)
 - [Java target and runner JVMs](#java-target-and-runner-jvms)
@@ -42,7 +46,17 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 
 Focused scope: project creation and Maven dependency lifecycle management. The plugin does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
 
+## Built with Codex
+
+I built duke.nvim with GPT-5.6 through Codex CLI during OpenAI Build Week. I supplied the product direction, Java and Neovim workflow, safety invariants, scope decisions, and release authorization. Codex accelerated implementation, edge-case investigation, test construction, documentation synchronization, live Neovim verification, and release checks.
+
+Important human decisions included making safe Maven mutation the product's center, keeping Gradle dependency editing out until it can meet the same safety bar, leaving JDTLS management to existing tools, and requiring explicit confirmation before interactive writes. Codex implemented and verified the safe POM engine, dependency lifecycle, multi-module transaction, stable Lua interface, and interactive workflows under those constraints.
+
+Codex's strict rule-following was valuable for file safety and release discipline, but it also taught me to separate true invariants from workflow preferences. Tests, live disposable projects, exact diffs, and CI remained the evidence for every completion claim. See the [project story](PROJECT-STORY.md) for the fuller collaboration and design history.
+
 ## 📦 Requirements
+
+Supported editor: Neovim 0.11 or newer. CI verifies Neovim 0.11.0, stable, and nightly on Linux. The pure Lua plugin may work elsewhere when the required external tools are available, but macOS and Windows are not currently CI-verified.
 
 Plugin core:
 
@@ -96,6 +110,19 @@ Example:
 ```
 
 Enter `~/Projects` as destination and `demo` as artifact ID to create `~/Projects/demo`. Existing targets are never overwritten.
+
+## Judge testing path
+
+No source build is required. Install the latest tagged release with the lazy.nvim snippet above. The shortest interactive path needs Neovim 0.11+, `java`, `mvn`, `curl`, and network access.
+
+1. Run `:DukeHealth` and confirm Java, Maven, and curl are available.
+2. Run `:DukeMaven` from a disposable parent directory. Choose the Maven quickstart archetype, enter temporary coordinates such as `com.example:duke-demo`, review the destination, and confirm.
+3. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm.
+4. Inspect the resulting POM. The plugin adds one root dependency block without reformatting unrelated content.
+5. Run `:DukeInfo com.google.guava:guava` to inspect current Maven Central version information without changing the project.
+6. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
+
+For repository verification instead of the interactive path, clone the repository and run `make format`, `make lint`, and `make test`. GitHub CI runs lint plus tests against the exact Neovim 0.11 floor, stable, and nightly.
 
 ## Commands
 
