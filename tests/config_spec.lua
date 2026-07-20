@@ -12,6 +12,7 @@ describe("config", function()
 
     assert.equals("com.example", opts.group_id)
     assert.equals("auto", opts.java_version)
+    assert.equals("auto", opts.creation.layout)
     assert.same({}, opts.java_homes)
     assert.equals("mvn", opts.maven.command)
     assert.equals("auto", opts.maven.runner_java_version)
@@ -54,6 +55,7 @@ describe("config", function()
     config.setup({
       group_id = "",
       java_version = 21,
+      creation = { layout = "huge" },
       maven = { wrapper = "yes" },
       handoff = { enabled = "yes" },
     })
@@ -61,8 +63,15 @@ describe("config", function()
 
     assert.equals("com.example", opts.group_id)
     assert.equals("auto", opts.java_version)
+    assert.equals("auto", opts.creation.layout)
     assert.is_false(opts.maven.wrapper)
     assert.is_false(opts.handoff.enabled)
+  end)
+
+  it("accepts Creation Center layout preferences", function()
+    config.setup({ creation = { layout = "compact" } })
+
+    assert.equals("compact", config.get().creation.layout)
   end)
 
   it("rejects invalid Maven Central search options", function()
@@ -95,6 +104,7 @@ describe("config", function()
         maven = "broken",
         gradle = { project_types = "broken" },
         spring = false,
+        creation = false,
         handoff = { command = { "tmux", 42 } },
       })
     end)
@@ -103,6 +113,7 @@ describe("config", function()
     assert.equals("mvn", opts.maven.command)
     assert.equals("java-application", opts.gradle.project_types[1].id)
     assert.equals("https://start.spring.io", opts.spring.metadata_url)
+    assert.equals("auto", opts.creation.layout)
     assert.is_nil(opts.handoff.command)
   end)
 

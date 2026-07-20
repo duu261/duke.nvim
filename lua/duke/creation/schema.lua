@@ -131,8 +131,28 @@ function M.validate(kind, config, snapshot)
   errors.package_name = maven.validate_package(values.package_name)
   if blank(values.java_version) then
     errors.java_version = "Java target is required"
-  elseif snapshot.derived and snapshot.derived.runner_compatibility_error then
-    errors.java_version = snapshot.derived.runner_compatibility_error
+  else
+    local derived = snapshot.derived or {}
+    local detected = derived[kind .. "_detected_runtime"]
+    if
+      detected
+      and tonumber(values.java_version)
+      and tonumber(values.java_version) > tonumber(detected)
+    then
+      errors.java_version = string.format(
+        "Java target %s exceeds %s runner Java %s",
+        values.java_version,
+        kind == "maven" and "Maven" or "Gradle",
+        detected
+      )
+    elseif
+      kind == "spring"
+      and type(derived.java_versions) == "table"
+      and #derived.java_versions > 0
+      and not vim.tbl_contains(derived.java_versions, values.java_version)
+    then
+      errors.java_version = "Java target is unavailable for selected Spring Boot version"
+    end
   end
 
   if kind == "maven" and type(values.archetype) ~= "table" then

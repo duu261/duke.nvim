@@ -6,6 +6,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
+- `:DukeNew`, `:DukeMaven`, `:DukeGradle`, and `:DukeSpring` now share a native Creation Center with persistent editable state, configurable responsive, wide, or compact layouts, visible validation and discovery status, and an integrated Spring dependency view.
 - `:Duke` now opens a native Project Center inside Maven and Gradle workspaces, showing local modules, direct dependencies, Spring configuration filenames, diagnostics, and navigation without running a build tool.
 - Explicit Project Center refresh adds wrapper-backed, read-only Maven effective/dependency analysis and project-scoped Gradle Java, toolchain, and dependency reports, with selected versions, dependency paths, analysis counts, and partial states instead of fabricated resolved data.
 - `duke.inspect(opts, callback)` exposes local or explicitly resolved workspace snapshots to scripts and integrations.
@@ -16,6 +17,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Changed
 
+- Project creation failures preserve the form for correction or retry. Observable target collisions block before confirmation. Cancel restores editor state, stale async callbacks are ignored, duplicate completion callbacks are suppressed, and Creation Center boundary failures are contained and logged.
 - Product scope now includes read-only Maven/Gradle workspace intelligence and Spring configuration-file navigation while keeping JDTLS, app running, formatting, tests, Gradle dependency editing, and Spring value editing external.
 - Existing-project Maven resolution and dependency insight prefer an executable project Maven Wrapper, with `maven.command` as fallback.
 

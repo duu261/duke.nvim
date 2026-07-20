@@ -36,12 +36,25 @@ function Model:set(key, value)
   if not field_exists(self, key) then
     return nil, "unknown creation field: " .. tostring(key)
   end
+  local restore_package = false
+  if key == "destination" and type(value) == "string" and vim.trim(value) ~= "" then
+    value = vim.fs.normalize(vim.fn.fnamemodify(vim.trim(value), ":p"))
+  elseif key == "package_name" and type(value) == "string" and vim.trim(value) == "" then
+    value =
+      require("duke.maven").package_name(self.state.values.group_id, self.state.values.artifact_id)
+    restore_package = true
+  end
   self.state.values[key] = vim.deepcopy(value)
   if key == "package_name" then
-    self.package_explicit = true
+    self.package_explicit = not restore_package
+  elseif key == "name" then
+    self.name_explicit = true
   elseif (key == "group_id" or key == "artifact_id") and not self.package_explicit then
     self.state.values.package_name =
       require("duke.maven").package_name(self.state.values.group_id, self.state.values.artifact_id)
+  end
+  if key == "artifact_id" and self.state.kind == "spring" and not self.name_explicit then
+    self.state.values.name = value
   end
   self.state.dirty = true
   refresh(self)
@@ -75,6 +88,10 @@ function Model:switch(kind)
   local values = assert(schema.defaults(kind, self.config, self.context))
   for key, value in pairs(shared) do
     values[key] = value
+  end
+  if kind == "spring" then
+    values.name = values.artifact_id
+    self.name_explicit = false
   end
   self.generation = self.generation + 1
   self.active_tokens = {}
@@ -195,6 +212,7 @@ function M.new(config, opts)
     generation = 0,
     active_tokens = {},
     package_explicit = false,
+    name_explicit = false,
     state = {
       kind = kind,
       values = assert(schema.defaults(kind, config, context)),

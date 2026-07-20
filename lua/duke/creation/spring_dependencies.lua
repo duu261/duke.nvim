@@ -54,6 +54,7 @@ function View:snapshot()
     category_index = self.category_index,
     results = vim.deepcopy(current_results),
     result_index = self.result_index,
+    selected_index = self.selected_index,
     selected_ids = selected_ids,
     selected_count = #selected_ids,
     pane = self.pane,
@@ -105,6 +106,8 @@ function View:move(delta)
     self.result_index = 1
   elseif self.pane == "results" then
     self.result_index = clamp(self.result_index + delta, #results(self))
+  elseif self.pane == "selected" then
+    self.selected_index = clamp(self.selected_index + delta, #ordered_selected(self))
   end
   return true
 end
@@ -116,12 +119,28 @@ function View:set_query(query)
 end
 
 function View:toggle()
+  if self.pane == "selected" then
+    local id = ordered_selected(self)[self.selected_index]
+    if not id then
+      return false
+    end
+    self.selected[id] = nil
+    self.selected_index = clamp(self.selected_index, #ordered_selected(self))
+    return true
+  end
+  if self.pane ~= "results" then
+    return false
+  end
   local item = results(self)[self.result_index]
   if not item then
     return false
   end
   self.selected[item.id] = not self.selected[item.id] or nil
   return true
+end
+
+function View:dirty()
+  return not vim.deep_equal(ordered_selected(self), self.initial_selected)
 end
 
 function View:back()
@@ -150,8 +169,10 @@ function M.new(items, selected_ids)
     items = vim.deepcopy(items or {}),
     categories = categories,
     selected = selected,
+    initial_selected = vim.deepcopy(selected_ids or {}),
     category_index = 1,
     result_index = 1,
+    selected_index = 1,
     pane = "categories",
     query = "",
   }, View)

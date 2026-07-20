@@ -73,6 +73,16 @@ describe("creation facade", function()
     assert.is_function(captured.finish)
   end)
 
+  it("passes the configured layout preference to the center", function()
+    local config = require("duke.config")
+    config.setup({ creation = { layout = "compact" } })
+
+    require("duke.creation").open({ kind = "maven" })
+
+    assert.equals("compact", captured.layout)
+    config.setup({})
+  end)
+
   it("contains center startup failures", function()
     local notices = {}
     local saved_notify = vim.notify
@@ -162,6 +172,37 @@ describe("creation facade", function()
     assert.equals(2, refreshes)
   end)
 
+  it("preserves a selected Java target during later discovery", function()
+    package.loaded["duke.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["17"] = "/jdk/17", ["21"] = "/jdk/21", ["23"] = "/jdk/23" }
+      end,
+      installed = function()
+        return { "17", "21", "23" }
+      end,
+      default = function(configured)
+        return configured == "auto" and "17" or configured
+      end,
+      runner_env = function(version)
+        return { JAVA_HOME = "/jdk/" .. version }
+      end,
+      maven_runtime_async = function(_, callback)
+        callback("23")
+      end,
+    }
+    require("duke.creation").open({ kind = "maven" })
+    local session = { model = captured.model, refresh = function() end }
+    captured.discover(session, "all")
+    captured.model:set("java_version", "21")
+
+    captured.discover(session, "all")
+
+    assert.equals("21", captured.model:snapshot().values.java_version)
+  end)
+
   it("loads Spring defaults and compatible dependency catalog", function()
     local actual_metadata = require("duke.metadata")
     local client = {
@@ -172,6 +213,11 @@ describe("creation facade", function()
       type = {
         default = "maven-project",
         values = {
+          {
+            id = "gradle-project",
+            name = "Gradle",
+            tags = { format = "project", build = "gradle" },
+          },
           {
             id = "maven-project",
             name = "Maven",
@@ -238,6 +284,124 @@ describe("creation facade", function()
       end, state.derived.spring_dependency_items)
     )
     assert.same(catalog, state.derived.spring_catalog)
+  end)
+
+  it("keeps validated cache fallback visible in the Spring form", function()
+    package.loaded["duke.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["17"] = "/jdk/17" }
+      end,
+      installed = function()
+        return { "17" }
+      end,
+      default = function(requested, _, fallback)
+        return requested == "auto" and fallback or requested
+      end,
+      runner_env = function()
+        return nil
+      end,
+    }
+    package.loaded["duke.metadata"] = {
+      cache_path = function()
+        return "/tmp/cache"
+      end,
+      fetch_cached = function(url, _, _, callback)
+        local value = url:find("dependencies", 1, true) and { dependencies = { web = {} } } or {}
+        callback(nil, value, "cache", { reason = "fetch", age_seconds = 120 })
+      end,
+      values = function(_, key)
+        return ({
+          javaVersion = { "17" },
+          bootVersion = { "4.0.0" },
+          language = { "java" },
+          packaging = { "jar" },
+        })[key]
+      end,
+      project_types = function()
+        return { { id = "maven-project", build = "maven", name = "Maven" } }
+      end,
+      default = function(_, _, fallback)
+        return fallback
+      end,
+      flatten_dependencies = function()
+        return { { id = "web", name = "Spring Web" } }
+      end,
+      format_age = function()
+        return "2 minutes ago"
+      end,
+      is_client = function()
+        return true
+      end,
+      is_catalog = function()
+        return true
+      end,
+    }
+
+    require("duke.creation").open({ kind = "spring" })
+    captured.discover({ model = captured.model, refresh = function() end }, "all")
+    local state = captured.model:snapshot()
+
+    assert.equals("cache", state.derived.spring_metadata_source)
+    assert.equals("cache", state.derived.spring_catalog_source)
+    assert.equals(
+      "Spring Initializr unreachable; using cached data from 2 minutes ago",
+      state.banner
+    )
+  end)
+
+  it("contains Spring metadata callback failures", function()
+    local fetch_callback
+    package.loaded["duke.java"] = {
+      active = function()
+        return "23"
+      end,
+      discover_homes = function()
+        return { ["17"] = "/jdk/17" }
+      end,
+      installed = function()
+        return { "17" }
+      end,
+      default = function(_, _, fallback)
+        return fallback or "17"
+      end,
+      runner_env = function()
+        return nil
+      end,
+    }
+    package.loaded["duke.metadata"] = {
+      cache_path = function()
+        return "/tmp/cache"
+      end,
+      fetch_cached = function(_, _, _, callback)
+        fetch_callback = callback
+      end,
+      values = function()
+        error("metadata transform exploded")
+      end,
+      is_client = function()
+        return true
+      end,
+    }
+    require("duke.creation").open({ kind = "spring" })
+    local refresh_calls = 0
+    local session = {
+      model = captured.model,
+      refresh = function()
+        refresh_calls = refresh_calls + 1
+        if refresh_calls > 1 then
+          error("refresh exploded")
+        end
+      end,
+    }
+    captured.discover(session, "all")
+
+    local ok, err = pcall(fetch_callback, nil, {}, "remote")
+
+    assert.is_true(ok, err)
+    assert.is_truthy(captured.model:snapshot().banner:find("metadata callback failed", 1, true))
   end)
 
   it("performs existing successful project handoff", function()

@@ -131,6 +131,31 @@ describe("creation schema", function()
     assert.equals("Spring dependency catalog is not ready", errors.dependency_ids)
   end)
 
+  it("keeps but rejects a Java target unsupported by Spring metadata", function()
+    local values = base_values()
+    values.java_version = "23"
+    values.name = "Service"
+    values.boot_version = "4.1.0"
+    values.dependency_ids = {}
+    values.spring_project_type = { id = "maven-project", build = "maven" }
+    values.spring_language = "java"
+    values.spring_packaging = "jar"
+
+    local errors = schema.validate("spring", config, {
+      values = values,
+      derived = {
+        java_versions = { "17", "21" },
+        spring_catalog = { dependencies = {} },
+      },
+    })
+
+    assert.equals(
+      "Java target is unavailable for selected Spring Boot version",
+      errors.java_version
+    )
+    assert.equals("23", values.java_version)
+  end)
+
   it("reports field validation errors before request projection", function()
     local values = base_values()
     values.destination = ""

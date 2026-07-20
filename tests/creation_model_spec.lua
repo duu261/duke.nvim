@@ -33,6 +33,45 @@ describe("creation model", function()
     assert.equals("dev.duu.orders", creation:snapshot().values.package_name)
   end)
 
+  it("restores the derived package when package input is blank", function()
+    local creation = model.new(config, { cwd = "/work" })
+    creation:set("package_name", "dev.duu.custom")
+
+    creation:set("package_name", "  ")
+    creation:set("artifact_id", "orders")
+
+    assert.equals("com.example.orders", creation:snapshot().values.package_name)
+  end)
+
+  it("normalizes an existing destination", function()
+    local destination = vim.fn.tempname()
+    vim.fn.mkdir(destination, "p")
+    local creation = model.new(config, { cwd = "/work" })
+
+    creation:set("destination", destination .. "/../" .. vim.fs.basename(destination))
+    assert.equals(vim.fs.normalize(destination), creation:snapshot().values.destination)
+    vim.fn.delete(destination, "d")
+  end)
+
+  it("updates Spring name until name is explicitly edited", function()
+    local creation = model.new(config, { kind = "spring", cwd = "/work" })
+
+    creation:set("artifact_id", "orders")
+    assert.equals("orders", creation:snapshot().values.name)
+    creation:set("name", "Order API")
+    creation:set("artifact_id", "billing")
+    assert.equals("Order API", creation:snapshot().values.name)
+  end)
+
+  it("derives Spring name from a shared artifact after kind switch", function()
+    local creation = model.new(config, { kind = "maven", cwd = "/work" })
+    creation:set("artifact_id", "orders")
+
+    creation:switch("spring")
+
+    assert.equals("orders", creation:snapshot().values.name)
+  end)
+
   it("preserves shared values and resets kind-specific values", function()
     local creation = model.new(config, { kind = "maven", cwd = "/work" })
     creation:set("artifact_id", "service")

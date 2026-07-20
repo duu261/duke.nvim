@@ -30,7 +30,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, understand existing Jav
 
 ## ✨ Features
 
-- Guided Maven, Gradle, and Spring Boot wizards with destination, coordinates, package, Java, workflow-specific choices, and final review.
+- Native Maven, Gradle, and Spring Boot Creation Center with persistent fields, visible validation, Java runtime status, and Spring dependency selection.
 - Native Project Center for Maven reactors and Gradle workspaces, with modules, direct dependencies, Spring configuration files, diagnostics, navigation, and explicit wrapper-backed refresh.
 - Maven quickstart and web application archetypes with optional Maven Wrapper generation.
 - Wrapper-backed Java, Kotlin, or Groovy Gradle applications, libraries, and plugins using Kotlin or Groovy build scripts.
@@ -104,9 +104,9 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 1. Install plugin and restart Neovim.
 2. Run `:DukeHealth` to load a lazy installation and check available tools.
-3. Run `:DukeNew`, then choose Maven, Gradle, or Spring Boot. Direct workflow commands remain available.
-4. Choose the destination parent directory, coordinates, package, project options, Java target, and Spring dependencies when applicable. Maven also prompts for an archetype. Gradle prompts for source language and build-script DSL. Spring also prompts for project name, description, Boot version, and Maven or Gradle build type.
-5. Review the final destination and selected settings, then confirm creation.
+3. Run `:DukeNew`. Creation Center opens with Maven, Gradle, and Spring Boot choices plus every project field in one persistent view. Direct workflow commands open the same view with their generator preselected.
+4. Move with `j`/`k`, press `<Enter>` to edit a field, and use `<Tab>` to move between logical sections. Spring dependencies open inside the same window.
+5. Press `c` when validation passes, review the visible settings, then confirm creation.
 
 Example:
 
@@ -138,7 +138,7 @@ For repository verification instead of the interactive path, clone the repositor
 | Command | Action |
 | --- | --- |
 | `:Duke` | Open Project Center inside Maven or Gradle workspaces; show command help elsewhere |
-| `:DukeNew` | Choose Maven, Gradle, or Spring Boot, then run its wizard |
+| `:DukeNew` | Open Creation Center with Maven, Gradle, and Spring Boot choices |
 | `:DukeMaven` | Create Maven quickstart or web application project |
 | `:DukeGradle` | Create Java, Kotlin, or Groovy Gradle application, library, or plugin |
 | `:DukeSpring` | Create Spring Boot Maven or Gradle project |
@@ -157,7 +157,11 @@ For repository verification instead of the interactive path, clone the repositor
 
 With Telescope, use `<Tab>` to toggle add or removal choices and `<Enter>` to finish. Without Telescope, select dependencies one at a time through `vim.ui.select`, then choose the `[Done - N selected]` row. Both paths show the current selection count. Updates select one dependency per run.
 
-Every generator asks for a destination parent directory, defaulting to Neovim's current working directory. A final review shows destination, coordinates, build system, Java target, runner JVM when applicable, and workflow-specific settings. Choosing `Cancel` starts no generator process.
+Creation Center uses one state model for every generator. `creation.layout = "auto"` gives normal editors a large centered float and editors below 100 columns or 28 lines a single-column scratch buffer in the current window. Use `"wide"` or `"compact"` to keep one presentation. Cancel restores the original buffer, view, cursor, and working directory without clearing newer unsaved changes.
+
+Controls: `j`/`k` move, `<Tab>`/`<S-Tab>` change logical section, `<Enter>` edits, `c` creates, `?` toggles help, and `q` cancels. Text and paths use `vim.ui.input`; choices use `vim.ui.select` or Telescope when installed. Spring dependencies use `<Space>` to toggle, `/` to search, `b` to return while preserving selections, and `<Enter>` to accept.
+
+Runtime and Initializr discovery remain visible in the form. Create stays unavailable while discovery runs or validation fails. Generator failure keeps the form open with every value preserved for correction or retry. Opening, editing, failure, and cancel never change cwd or write a project. Existing staging, collision, promotion, and successful handoff rules remain authoritative.
 
 > [!IMPORTANT]
 > New Spring projects show only Boot versions offered by the configured Initializr server. On a Spring Boot `pom.xml`, `:DukeAdd` reads the existing Boot version. If the server no longer supplies that old version's catalog, insertion needs a previously cached catalog from the same configured URL, a compatible custom server, or a Boot upgrade. Plain Maven poms use live Maven Central search instead.
@@ -174,6 +178,9 @@ require("duke").setup({
   java_versions = {}, -- extra choices for Maven/Gradle projects
   java_homes = {}, -- optional version-to-JDK-home map
   entry_selector = nil, -- optional function(project_dir, detected_entry)
+  creation = {
+    layout = "auto", -- "auto", "wide", or "compact"
+  },
   maven = {
     command = "mvn", -- project generation and existing-project fallback
     runner_java_version = "auto", -- active Java; separate from project target
@@ -236,7 +243,7 @@ require("duke").setup({
 
 Maven and Gradle choices include active Java, `JDK<version>` environment variables, configured homes, and JDKs discovered under common Linux, macOS, SDKMAN, asdf, and Maven directories. A configured home is accepted only when its `bin/java -version` output matches the configured version key.
 
-Discovery resolves duplicate JDK paths, caps each version probe at one second, and reuses one cached snapshot throughout Maven and Gradle wizards. Run `java_runtimes({ refresh = true })` after installing or removing a JDK during the current Neovim session.
+Discovery resolves duplicate JDK paths, caps each version probe at one second, and reuses one cached snapshot throughout a Creation Center session. Run `java_runtimes({ refresh = true })` after installing or removing a JDK during the current Neovim session.
 
 `maven.runner_java_version` and `gradle.runner_java_version` select the build JVM independently from the project target. This lets modern Gradle run on a modern JVM while the generated project still targets Java 8 or 11. Runner `JAVA_HOME` and `PATH` stay scoped to the child process; global shell state never changes.
 
@@ -400,7 +407,7 @@ require("duke").plan_upgrades({
 end)
 ```
 
-`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
+`require("duke").new()` opens Creation Center with the generator selector active. `new_maven()`, `new_gradle()`, and `new_spring()` open the same center with that generator preselected. `new_module()` starts the `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("duke").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 

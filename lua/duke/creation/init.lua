@@ -48,6 +48,28 @@ local function refresh(session)
   end
 end
 
+local function guarded_callback(session, context, token, callback)
+  return function(...)
+    local args = { ... }
+    local ok, err = xpcall(function()
+      callback(unpack(args))
+    end, debug.traceback)
+    if ok then
+      return
+    end
+    pcall(function()
+      session.model:reject_async(token, context .. " failed")
+      session.model:set_busy(false)
+      session.model:set_banner(context .. " failed; see :DukeLog")
+    end)
+    pcall(function()
+      require("duke.log").add("ERROR", context .. " failed: " .. tostring(err))
+    end)
+    pcall(vim.notify, "duke.nvim: " .. context .. " failed; see :DukeLog", vim.log.levels.ERROR)
+    pcall(refresh, session)
+  end
+end
+
 local function fallback_message(fallback)
   local metadata = require("duke.metadata")
   local age = metadata.format_age(fallback.age_seconds)
@@ -69,7 +91,9 @@ local function discover_runtimes(session, config)
       homes = java.discover_homes(config.java_homes),
     }
     local versions = java.installed(config.java_versions, config.java_homes, runtimes)
-    local target = java.default(config.java_version, versions, runtimes.active)
+    local current_target = session.model:snapshot().values.java_version
+    local target = current_target ~= "auto" and current_target
+      or java.default(config.java_version, versions, runtimes.active)
     local derived = {
       java_versions = versions,
       runtimes = runtimes,
@@ -105,34 +129,25 @@ local function discover_runtimes(session, config)
   local runner_token = session.model:begin_async("runner")
   local tool = config[kind]
   local env = state.derived[kind .. "_runner_env"]
-  local start_ok, start_error = pcall(detect, tool.command, function(detected)
-    local current = session.model:snapshot()
-    local effective = detected
-    if kind == "maven" and not effective then
-      effective = current.derived.runtimes and current.derived.runtimes.active
-    end
-    local compatibility_error
-    if
-      effective
-      and tonumber(current.values.java_version)
-      and tonumber(effective)
-      and tonumber(current.values.java_version) > tonumber(effective)
-    then
-      compatibility_error = string.format(
-        "Java target %s exceeds %s runner Java %s",
-        current.values.java_version,
-        kind == "maven" and "Maven" or "Gradle",
-        effective
-      )
-    end
-    session.model:resolve_async(runner_token, {
-      derived = {
-        [kind .. "_detected_runtime"] = effective,
-        runner_compatibility_error = compatibility_error,
-      },
-    })
-    refresh(session)
-  end, tool.timeout, env)
+  local start_ok, start_error = pcall(
+    detect,
+    tool.command,
+    guarded_callback(session, "runner callback", runner_token, function(detected)
+      local current = session.model:snapshot()
+      local effective = detected
+      if kind == "maven" and not effective then
+        effective = current.derived.runtimes and current.derived.runtimes.active
+      end
+      session.model:resolve_async(runner_token, {
+        derived = {
+          [kind .. "_detected_runtime"] = effective,
+        },
+      })
+      refresh(session)
+    end),
+    tool.timeout,
+    env
+  )
   if not start_ok then
     session.model:reject_async(runner_token, start_error)
     refresh(session)
@@ -152,7 +167,7 @@ local function discover_catalog(session, config)
     url,
     metadata.cache_path("dependencies", boot_version, config.spring.dependencies_url),
     nil,
-    function(err, catalog, source, fallback)
+    guarded_callback(session, "catalog callback", token, function(err, catalog, source, fallback)
       if err then
         session.model:reject_async(token, err)
         refresh(session)
@@ -179,7 +194,7 @@ local function discover_catalog(session, config)
         session.model:set_banner(fallback_message(fallback))
       end
       refresh(session)
-    end,
+    end),
     metadata.is_catalog
   )
 end
@@ -194,55 +209,70 @@ local function discover_spring(session, config)
     config.spring.metadata_url,
     metadata.cache_path("metadata", nil, config.spring.metadata_url),
     nil,
-    function(err, client, source, fallback)
-      if err then
-        session.model:reject_async(token, err)
+    guarded_callback(
+      session,
+      "Spring metadata callback",
+      token,
+      function(err, client, source, fallback)
+        if err then
+          session.model:reject_async(token, err)
+          refresh(session)
+          return
+        end
+        local java_versions = metadata.values(client, "javaVersion")
+        local boot_versions = metadata.values(client, "bootVersion")
+        local languages = metadata.values(client, "language")
+        local packaging = metadata.values(client, "packaging")
+        local project_types = metadata.project_types(client)
+        local boot = metadata.default(client, "bootVersion", boot_versions[1])
+        local current_target = session.model:snapshot().values.java_version
+        local target = current_target ~= "auto" and current_target
+          or require("duke.java").default(
+            config.java_version,
+            java_versions,
+            metadata.default(client, "javaVersion", java_versions[#java_versions])
+          )
+        local project_type
+        for _, candidate in ipairs(project_types) do
+          if candidate.id == config.spring.project_type then
+            project_type = candidate
+            break
+          end
+        end
+        project_type = project_type
+          or project_types[1]
+          or {
+            id = config.spring.project_type,
+            build = config.spring.project_type:match("^gradle") and "gradle" or "maven",
+          }
+        if
+          session.model:resolve_async(token, {
+            values = {
+              java_version = target,
+              boot_version = boot,
+              spring_project_type = project_type,
+              spring_language = metadata.default(client, "language", config.spring.language),
+              spring_packaging = metadata.default(client, "packaging", config.spring.packaging),
+            },
+            derived = {
+              spring_client = client,
+              java_versions = java_versions,
+              boot_version_choices = boot_versions,
+              spring_project_type_choices = project_types,
+              spring_language_choices = languages,
+              spring_packaging_choices = packaging,
+              spring_metadata_source = source,
+            },
+          })
+          and source == "cache"
+          and fallback
+        then
+          session.model:set_banner(fallback_message(fallback))
+        end
         refresh(session)
-        return
+        discover_catalog(session, config)
       end
-      local java_versions = metadata.values(client, "javaVersion")
-      local boot_versions = metadata.values(client, "bootVersion")
-      local languages = metadata.values(client, "language")
-      local packaging = metadata.values(client, "packaging")
-      local project_types = metadata.project_types(client)
-      local boot = metadata.default(client, "bootVersion", boot_versions[1])
-      local target = require("duke.java").default(
-        config.java_version,
-        java_versions,
-        metadata.default(client, "javaVersion", java_versions[#java_versions])
-      )
-      local project_type = project_types[1]
-        or {
-          id = config.spring.project_type,
-          build = config.spring.project_type:match("^gradle") and "gradle" or "maven",
-        }
-      if
-        session.model:resolve_async(token, {
-          values = {
-            java_version = target,
-            boot_version = boot,
-            spring_project_type = project_type,
-            spring_language = metadata.default(client, "language", config.spring.language),
-            spring_packaging = metadata.default(client, "packaging", config.spring.packaging),
-          },
-          derived = {
-            spring_client = client,
-            java_versions = java_versions,
-            boot_version_choices = boot_versions,
-            spring_project_type_choices = project_types,
-            spring_language_choices = languages,
-            spring_packaging_choices = packaging,
-            spring_metadata_source = source,
-          },
-        })
-        and source == "cache"
-        and fallback
-      then
-        session.model:set_banner(fallback_message(fallback))
-      end
-      refresh(session)
-      discover_catalog(session, config)
-    end,
+    ),
     metadata.is_client
   )
 end
@@ -281,6 +311,7 @@ function M.open(opts)
     return require("duke.creation.center").open({
       model = creation,
       config = config,
+      layout = opts.layout or config.creation.layout,
       submit = submit,
       finish = finish_project,
       discover = function(session, scope)
@@ -291,7 +322,9 @@ function M.open(opts)
   if ok then
     return result
   end
-  pcall(require("duke.log").add, "ERROR", result)
+  pcall(function()
+    require("duke.log").add("ERROR", result)
+  end)
   pcall(vim.notify, "duke.nvim: could not open Creation Center; see :DukeLog", vim.log.levels.ERROR)
   return nil
 end

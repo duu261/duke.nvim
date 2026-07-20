@@ -22,8 +22,8 @@ adds, updates, and removes root Maven dependencies,
 opens generated Java source for an existing Java filetype or JDTLS setup, and
 can pass a completed project to an optional handoff command.
 
-Guided wizards collect destination, coordinates, package, Java, and
-workflow-specific choices before a final review. Maven dependency workflows
+Creation Center keeps destination, coordinates, package, Java, and
+workflow-specific choices visible and editable. Maven dependency workflows
 provide single and multi-select pickers. Telescope provides searchable
 pickers; native vim.ui remains the dependency-free fallback.
 
@@ -49,6 +49,9 @@ absolute paths, parent traversal, symlinks, and hardlinks are rejected.
     java_versions = {},
     java_homes = {},
     entry_selector = nil,
+    creation = {
+      layout = "auto", -- "auto", "wide", or "compact"
+    },
     maven = {
       command = "mvn",
       runner_java_version = "auto",
@@ -107,6 +110,8 @@ absolute paths, parent traversal, symlinks, and hardlinks are rejected.
 <
 
 setup() is optional. Defaults apply when it is not called.
+creation.layout selects responsive, wide, or compact Creation Center presentation.
+All layouts share one state model and the same validation and generation behavior.
 All configured Spring Initializr URLs must use HTTPS. Curl permits only HTTPS
 for original requests and redirects.
 maven.command drives Maven project generation and is the fallback for
@@ -122,8 +127,9 @@ setup([{opts}])                              *duke.setup()*
     Every call clears cached Java runtime discovery.
 
 new()                                         *duke.new()*
-    Open the unified Maven, Gradle, and Spring Boot generator picker.
-    new_maven(), new_gradle(), and new_spring() start those wizards directly.
+    Open Creation Center with Maven, Gradle, and Spring Boot choices.
+    new_maven(), new_gradle(), and new_spring() open the same center with that
+    generator preselected.
 
 create({kind}, {opts}, {callback})          *duke.create()*
     Create a project without UI. kind must be "maven", "gradle", or
@@ -464,28 +470,50 @@ then choose [Done - N selected]. Both paths show the current selection count.
 
                                                       *:DukeNew*
 :DukeNew
-    Choose Maven, Gradle, or Spring Boot, then start that workflow's wizard.
+    Open Creation Center with Maven, Gradle, and Spring Boot choices.
 
                                                     *:DukeMaven*
 :DukeMaven
-    Pick a Maven archetype, then prompt for destination, coordinates, package,
-    and Java version. Review the project, then generate it. A single configured
-    archetype skips the picker. When maven.wrapper is true, generate mvnw before
-    promotion and require all Maven Wrapper files.
+    Open Creation Center with Maven preselected. Choose destination,
+    coordinates, package, archetype, and Java target in one persistent form.
+    When maven.wrapper is true, generate mvnw before promotion and require all
+    Maven Wrapper files.
 
                                                     *:DukeSpring*
 :DukeSpring
-    Prompt for destination, coordinates, project name, description, package,
-    Boot version, Maven or Gradle project type, language, packaging, Java
-    version, and dependencies. Review the project, then download and extract
-    the Spring Initializr project.
+    Open Creation Center with Spring Boot preselected. Initializr metadata,
+    Boot-specific dependencies, project type, language, packaging, and Java
+    compatibility stay visible in the persistent form.
 
                                                     *:DukeGradle*
 :DukeGradle
-    Prompt for destination, coordinates, package, Gradle project type, source
-    language, build-script DSL, and Java version. Review the project, then
-    generate a wrapper-backed Java, Kotlin, or Groovy application, library, or
-    Gradle plugin.
+    Open Creation Center with Gradle preselected. Choose destination,
+    coordinates, package, project type, source language, build-script DSL, and
+    Java target in one persistent form.
+
+CREATION CENTER                                      *duke-creation-center*
+
+    Normal editors use a large centered float. Editors below 100 columns or
+    28 lines use one column in the current window. Cancel restores the original
+    buffer, view, cursor, and cwd without clearing newer unsaved changes.
+
+      j / k             Move through actions.
+      Tab / Shift-Tab   Move between logical sections.
+      Enter             Edit selected field or accept Spring dependencies.
+      c                 Validate and create after confirmation.
+      ?                 Toggle contextual help.
+      q                 Cancel Creation Center.
+
+    Text and path fields use vim.ui.input. Enumerated fields use vim.ui.select
+    or Telescope when available. Spring dependency view adds Space to toggle,
+    / to search, and b to return without discarding selections.
+
+    Create remains unavailable during runtime or Initializr discovery and
+    while validation errors exist. A generator failure preserves every field
+    for correction or retry. Opening, editing, failure, and cancel never change
+    cwd or start a generator. Successful creation retains Duke's private
+    staging, collision protection, project event, optional handoff, and entry
+    opening behavior.
 
                                                   *:DukeModule*
 :DukeModule

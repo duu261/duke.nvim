@@ -7,6 +7,9 @@ local defaults = {
   java_versions = {},
   java_homes = {},
   entry_selector = nil,
+  creation = {
+    layout = "auto",
+  },
   maven = {
     command = "mvn",
     runner_java_version = "auto",
@@ -94,7 +97,7 @@ local function string_list(value, allow_empty)
 end
 
 local function validate(opts)
-  for _, key in ipairs({ "maven", "gradle", "spring", "handoff" }) do
+  for _, key in ipairs({ "creation", "maven", "gradle", "spring", "handoff" }) do
     if type(opts[key]) ~= "table" then
       warn(key, "a table")
       opts[key] = vim.deepcopy(defaults[key])
@@ -148,6 +151,10 @@ local function validate(opts)
   if opts.entry_selector ~= nil and type(opts.entry_selector) ~= "function" then
     warn("entry_selector", "a function or nil")
     opts.entry_selector = defaults.entry_selector
+  end
+  if not vim.tbl_contains({ "auto", "wide", "compact" }, opts.creation.layout) then
+    warn("creation.layout", "'auto', 'wide', or 'compact'")
+    opts.creation.layout = defaults.creation.layout
   end
   if not non_empty_string(opts.maven.command) then
     warn("maven.command", "a non-empty string")
