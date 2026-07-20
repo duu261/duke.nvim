@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## Unreleased
 
+## 0.11.0 - 2026-07-21
+
 ### Added
 
 - `:DukeDoctor[!]` adds explicit Maven reactor diagnosis, effective ownership, conflict and drift findings, staged version, exclusion, or proven cross-module alignment repairs, redacted multi-POM previews, transactional apply, and before/after receipt refresh.
