@@ -6,7 +6,9 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, understand existing Jav
 
 > **Built with GPT-5.6 through Codex CLI for OpenAI Build Week.** [See how Codex and I collaborated](#built-with-codex).
 
-[Watch the 2:42 demo](https://www.youtube.com/watch?v=FvqIwBG7PMg) | [OpenAI Build Week submission](https://devpost.com/software/duke-nvim)
+[Watch the 2:27 demo](https://youtu.be/O9dxnqnV8VU) | [OpenAI Build Week submission](https://devpost.com/software/duke-nvim)
+
+![Dependency drift to safe multi-file repair](assets/duke-safe-upgrade.gif)
 
 - [Features](#features)
 - [Built with Codex](#built-with-codex)
