@@ -112,6 +112,7 @@ local function owned(module, node, owner_module, declaration, kind, source)
     row.kind = "property"
   end
   row.requested_version = property and property.value or declaration.version
+  row.owner_coordinate = declaration.coordinate
   row.pom_path = owner_module.build_file
   row.line = property and property.line or declaration.version_line or declaration.start_line
   row.property = property_name
