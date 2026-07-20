@@ -53,6 +53,22 @@ local function inspect_error(callback, message)
   end)
 end
 
+local function reactor_completion(callback, operation)
+  local completed = false
+  return function(err, result)
+    if completed then
+      return
+    end
+    completed = true
+    vim.schedule(function()
+      local ok, callback_err = pcall(callback, err, result)
+      if not ok then
+        log("ERROR", "programmatic " .. operation .. " callback failed: " .. tostring(callback_err))
+      end
+    end)
+  end
+end
+
 local function absolute(path)
   return vim.fs.normalize(vim.fn.fnamemodify(path, ":p"))
 end
@@ -954,6 +970,122 @@ function M.apply_plan(plan, callback)
     return
   end
   require("duke.change_plan").apply(plan, callback)
+end
+
+function M.diagnose_workspace(opts, callback)
+  if type(callback) ~= "function" then
+    log("ERROR", "programmatic diagnose_workspace callback must be a function")
+    return
+  end
+  local complete = reactor_completion(callback, "diagnose_workspace")
+  if opts == nil then
+    opts = {}
+  end
+  if type(opts) ~= "table" then
+    complete("options must be a table")
+    return
+  end
+  if opts.path ~= nil and not non_empty_string(opts.path) then
+    complete("path must be a non-empty string")
+    return
+  end
+  if opts.deep ~= nil and type(opts.deep) ~= "boolean" then
+    complete("deep must be a boolean")
+    return
+  end
+  if opts.timeout ~= nil and not positive_number(opts.timeout) then
+    complete("timeout must be a positive number")
+    return
+  end
+  if opts.env ~= nil and type(opts.env) ~= "table" then
+    complete("env must be a table")
+    return
+  end
+  if
+    opts.runner_java_version ~= nil
+    and opts.runner_java_version ~= "auto"
+    and not numeric_version(opts.runner_java_version)
+  then
+    complete("runner_java_version must be 'auto' or a numeric version string")
+    return
+  end
+
+  local doctor_opts = vim.deepcopy(opts)
+  local config = require("duke.config").get()
+  if not doctor_opts.env then
+    local env, env_err = runner_env(config, "maven", opts.runner_java_version)
+    if env_err then
+      complete(env_err)
+      return
+    end
+    doctor_opts.env = env
+  end
+  doctor_opts.maven_command = opts.maven_command or config.maven.command
+  doctor_opts.timeout = opts.timeout or config.maven.timeout
+  local workspace_opts = vim.deepcopy(opts)
+  workspace_opts.resolve = false
+  local started, start_err = pcall(
+    require("duke.workspace").inspect,
+    workspace_opts,
+    function(err, snapshot)
+      if err then
+        complete(err, snapshot)
+        return
+      end
+      if type(snapshot) ~= "table" or snapshot.kind ~= "maven" then
+        complete("Maven Doctor requires a Maven workspace")
+        return
+      end
+      local doctor_started, doctor_err = pcall(
+        require("duke.maven_doctor").inspect,
+        snapshot,
+        doctor_opts,
+        function(inspect_err, diagnosed)
+          if inspect_err then
+            complete(inspect_err, diagnosed)
+            return
+          end
+          local capture_ok, captured, capture_err =
+            pcall(require("duke.reactor_plan").capture, diagnosed)
+          if not capture_ok then
+            complete("cannot capture reactor diagnosis: " .. tostring(captured))
+            return
+          end
+          complete(capture_err, captured)
+        end
+      )
+      if not doctor_started then
+        complete("cannot start Maven Doctor: " .. tostring(doctor_err))
+      end
+    end
+  )
+  if not started then
+    complete("cannot start workspace inspection: " .. tostring(start_err))
+  end
+end
+
+function M.plan_repairs(opts, callback)
+  if type(callback) ~= "function" then
+    log("ERROR", "programmatic plan_repairs callback must be a function")
+    return
+  end
+  local complete = reactor_completion(callback, "plan_repairs")
+  local started, start_err = pcall(require("duke.reactor_plan").build, opts, complete)
+  if not started then
+    complete("cannot start reactor planning: " .. tostring(start_err))
+  end
+end
+
+function M.apply_reactor_plan(plan, callback)
+  if type(callback) ~= "function" then
+    log("ERROR", "programmatic apply_reactor_plan callback must be a function")
+    return
+  end
+  local complete = reactor_completion(callback, "apply_reactor_plan")
+  local started, start_err = pcall(require("duke.reactor_plan").apply, plan, complete)
+  if not started then
+    complete("cannot start reactor apply: " .. tostring(start_err))
+  end
 end
 
 return M

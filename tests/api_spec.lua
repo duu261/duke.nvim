@@ -65,6 +65,7 @@ describe("programmatic API", function()
       "duke.pom",
       "duke.pom_file",
       "duke.project",
+      "duke.reactor_plan",
       "duke.spring",
       "duke.workspace",
     }) do
@@ -91,6 +92,93 @@ describe("programmatic API", function()
     assert.is_function(duke.inspect)
     assert.is_function(duke.plan_upgrades)
     assert.is_function(duke.apply_plan)
+    assert.is_function(duke.diagnose_workspace)
+    assert.is_function(duke.plan_repairs)
+    assert.is_function(duke.apply_reactor_plan)
+  end)
+
+  it("diagnoses Maven workspaces and captures opaque results", function()
+    local snapshot = { kind = "maven", root = "/workspace", modules = {} }
+    local captured = { id = "diagnosis", findings = {} }
+    package.loaded["duke.workspace"] = {
+      inspect = function(opts, callback)
+        assert.equals("/workspace", opts.path)
+        assert.is_false(opts.resolve)
+        callback(nil, snapshot)
+        callback("duplicate")
+      end,
+    }
+    package.loaded["duke.maven_doctor"] = {
+      inspect = function(received, opts, callback)
+        assert.equals(snapshot, received)
+        assert.is_true(opts.deep)
+        callback(nil, snapshot)
+        callback("duplicate")
+      end,
+    }
+    package.loaded["duke.reactor_plan"] = {
+      capture = function(received)
+        assert.equals(snapshot, received)
+        return captured
+      end,
+    }
+
+    local calls = {}
+    require("duke").diagnose_workspace(
+      { path = "/workspace", deep = true, env = {} },
+      function(err, result)
+        calls[#calls + 1] = { err = err, result = result }
+      end
+    )
+    assert.is_true(vim.wait(1000, function()
+      return #calls > 0
+    end))
+    assert.equals(1, #calls)
+    assert.is_nil(calls[1].err)
+    assert.equals(captured, calls[1].result)
+  end)
+
+  it("validates reactor API requests and contains startup failures", function()
+    local invalid = wait_result(function(callback)
+      require("duke").diagnose_workspace({ deep = "yes" }, function(err)
+        callback({ ok = err == nil, error = err })
+      end)
+    end)
+    assert.is_false(invalid.ok)
+    assert.matches("boolean", invalid.error)
+
+    package.loaded["duke.workspace"] = {
+      inspect = function(_, callback)
+        callback(nil, { kind = "gradle" })
+      end,
+    }
+    local non_maven = wait_result(function(callback)
+      require("duke").diagnose_workspace({}, function(err)
+        callback({ ok = err == nil, error = err })
+      end)
+    end)
+    assert.matches("Maven", non_maven.error)
+
+    package.loaded["duke.reactor_plan"] = {
+      build = function()
+        error("startup exploded")
+      end,
+      apply = function()
+        error("apply exploded")
+      end,
+    }
+    local plan_error = wait_result(function(callback)
+      require("duke").plan_repairs({ diagnosis_id = "id", repairs = {} }, function(err)
+        callback({ ok = err == nil, error = err })
+      end)
+    end)
+    assert.matches("cannot start", plan_error.error)
+    local apply_error = wait_result(function(callback)
+      require("duke").apply_reactor_plan({ id = "id" }, function(err)
+        callback({ ok = err == nil, error = err })
+      end)
+    end)
+    assert.matches("cannot start", apply_error.error)
   end)
 
   it("delegates opaque plan build and apply without translating descriptors", function()

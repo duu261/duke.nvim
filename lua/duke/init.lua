@@ -1498,4 +1498,16 @@ function M.apply_plan(plan, callback)
   require("duke.api").apply_plan(plan, callback)
 end
 
+function M.diagnose_workspace(opts, callback)
+  require("duke.api").diagnose_workspace(opts, callback)
+end
+
+function M.plan_repairs(opts, callback)
+  require("duke.api").plan_repairs(opts, callback)
+end
+
+function M.apply_reactor_plan(plan, callback)
+  require("duke.api").apply_reactor_plan(plan, callback)
+end
+
 return M

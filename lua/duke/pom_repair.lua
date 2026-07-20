@@ -189,6 +189,7 @@ function M.apply(lines, repairs)
           kind = "upgrade",
           coordinate = target.owner_coordinate or target.coordinate,
           property = target.property,
+          consumers = vim.deepcopy(target.consumers or {}),
           before = before,
           after = item.new_version,
         }
