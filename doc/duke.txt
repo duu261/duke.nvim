@@ -464,6 +464,24 @@ then choose [Done - N selected]. Both paths show the current selection count.
     enters the DukeUpgrade version picker and stale-file-safe write path.
     Canceling changes nothing.
 
+                                               *:DukeTree*
+:DukeTree
+    Find the nearest pom.xml, run Maven's dependency resolver once, and show
+    the resolved tree and selected versions in a read-only scratch buffer.
+    Any Maven annotations remain visible. Progress remains visible while Maven
+    runs. The command does not write pom.xml or change the working directory.
+    Process failure detail stays in :DukeLog.
+
+                                                *:DukeWhy*
+:DukeWhy [groupId:artifactId]
+    Show the ancestor path that pulls a direct or transitive artifact into the
+    nearest Maven project and the version Maven selected. Any omitted-conflict
+    annotation emitted by Maven remains visible, but modern Maven Dependency
+    Plugin versions do not reliably emit omitted nodes. Without an argument,
+    choose a root dependency or enter any transitive groupId:artifactId
+    coordinate. A coordinate absent from the resolved tree is reported plainly.
+    The command is read-only.
+
                                            *:DukeRemove*
 :DukeRemove
     Find the nearest pom.xml and multi-select root dependencies, including
@@ -551,10 +569,13 @@ because arbitrary searches and version lists are not cached.
 
 V1 owns Maven, Gradle, and Spring project creation, adding a module to an
 existing Maven multi-module reactor, root-level Maven dependency add, upgrade,
-outdated inspection, and removal, Maven Central version info lookup (see
-|:DukeInfo|), and Spring Boot parent version upgrade (see |:DukeBootUpgrade|).
+outdated inspection, and removal, resolved dependency tree and why-path
+inspection (see |:DukeTree| and |:DukeWhy|), Maven Central version info lookup
+(see |:DukeInfo|), and Spring Boot parent version upgrade (see
+|:DukeBootUpgrade|).
 It deliberately does not run applications, format code, execute tests, edit
-Gradle dependencies, or manage JDTLS.
+Gradle dependencies, or manage JDTLS. It complements nvim-jdtls, nvim-java,
+and other Java language tooling by owning project and dependency workflow.
 
 For failures:
 

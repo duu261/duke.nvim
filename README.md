@@ -35,6 +35,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 - Spring Boot Maven and Gradle projects using Initializr-provided metadata and dependency choices.
 - Safe Maven dependency add, upgrade, outdated inspection, and removal workflows, with installed markers in add pickers.
 - Managed dependency version resolution through `mvn dependency:list` for `:DukeOutdated` and `:DukeUpgrade`; dependencies controlled by a parent or BOM show their resolved version instead of being hidden or skipped.
+- `:DukeTree` shows the resolved Maven dependency tree, while `:DukeWhy` isolates the paths that pull in a direct or transitive artifact and shows the version Maven selected.
 - `:DukeInfo [groupId:artifactId]` shows latest and recent versions with release dates from Maven Central in a read-only scratch buffer.
 - `:DukeBootUpgrade` detects Spring Boot versions from parent POMs and from `spring-boot-dependencies` BOM imports in `<dependencyManagement>`, with BOM upgrades deferred.
 - Version pickers show Maven Central release dates and name the selected dependency in follow-up prompts.
@@ -44,7 +45,7 @@ Safely scaffold Maven, Gradle, and Spring Boot projects, manage and inspect Mave
 - Telescope or native `vim.ui` pickers, including visible multi-select counts and Java LTS markers.
 - Generated Java entry opening, `User DukeProjectCreated`, and optional post-create handoff.
 
-Focused scope: project creation and Maven dependency lifecycle management. The plugin does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
+Focused scope: project creation and Maven dependency lifecycle management. Duke complements Java language tooling such as `nvim-jdtls` and `nvim-java`; it does not run, format, or test projects, edit Gradle dependencies, or manage JDTLS.
 
 ## Built with Codex
 
@@ -69,7 +70,7 @@ Workflow tools:
 | Tool | Needed for |
 | --- | --- |
 | `java` | Java discovery and project workflows |
-| `mvn` | Maven archetype generation, Maven Wrapper generation, and managed dependency version resolution |
+| `mvn` | Maven archetype generation, Maven Wrapper generation, managed version resolution, and dependency insight |
 | `gradle` | Gradle project generation |
 | `curl` | Spring requests and Maven Central dependency search or version lookup |
 | `tar` | Spring archive inspection and extraction |
@@ -120,7 +121,8 @@ No source build is required. Install the latest tagged release with the lazy.nvi
 3. Open the generated `pom.xml`, run `:DukeAdd`, search for `guava`, select `com.google.guava:guava`, choose a version and compile scope, review the exact coordinate, and confirm.
 4. Inspect the resulting POM. The plugin adds one root dependency block without reformatting unrelated content.
 5. Run `:DukeInfo com.google.guava:guava` to inspect current Maven Central version information without changing the project.
-6. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
+6. Run `:DukeTree` to inspect the resolved classpath, then `:DukeWhy com.google.guava:failureaccess` to show why Guava's transitive dependency is present.
+7. Run `:DukeRemove`, select the added dependency, and cancel once to verify that cancellation leaves the POM unchanged. Run it again and confirm to remove the dependency.
 
 For repository verification instead of the interactive path, clone the repository and run `make format`, `make lint`, and `make test`. GitHub CI runs lint plus tests against the exact Neovim 0.11 floor, stable, and nightly.
 
@@ -139,6 +141,8 @@ For repository verification instead of the interactive path, clone the repositor
 | `:DukeBootUpgrade` | Upgrade the Spring Boot parent `<version>` from Maven Central |
 | `:DukeOutdated` | Compare root dependency versions with Maven Central; resolves managed versions |
 | `:DukeRemove` | Remove selected root dependencies after confirmation |
+| `:DukeTree` | Show the resolved Maven dependency tree and selected versions |
+| `:DukeWhy [groupId:artifactId]` | Show the path that pulls a dependency into the project |
 | `:DukeInfo` | Show Maven Central versions and release dates for a coordinate |
 | `:DukeClearCache` | Delete all cached Initializr metadata and dependency catalogs |
 | `:DukeLog` | Show internal operation log |
@@ -270,13 +274,15 @@ For a plain Maven pom, `:DukeAdd` prompts for a Maven Central query and shows `g
 
 `:DukeInfo` accepts an optional `groupId:artifactId` argument and shows latest and recent versions with release dates from Maven Central in a scratch buffer. Without an argument, the command prompts for a coordinate. The buffer is read-only and wipes on close.
 
+`:DukeTree` runs Maven's resolver against the nearest `pom.xml` and renders the resolved dependency tree in a read-only scratch buffer. `:DukeWhy [groupId:artifactId]` runs the same resolver with a coordinate filter, showing every ancestor path plus the version Maven selected. If a Maven version emits annotations such as `omitted for conflict with ...`, Duke preserves them, but modern Maven Dependency Plugin versions do not reliably emit omitted nodes. Without an argument, `:DukeWhy` offers root dependencies plus an option to type any transitive coordinate. Both commands show progress while Maven runs, are read-only, run Maven once, leave the POM and working directory unchanged, and keep failure detail in `:DukeLog`.
+
 `:DukeModule` prompts for an artifact ID, then a package name pre-filled from the reactor's groupId, then confirms before adding a child module to the Maven reactor rooted at the current working directory. The parent `pom.xml` gains only the new `<module>` entry, created inside a fresh `<modules>` block when none exists. Canceling any prompt or the confirmation writes nothing. Only a root `pom.xml` with `<packaging>pom</packaging>` is eligible; a plain jar-packaging pom is rejected without creating a directory.
 
 No Boot versions are hardcoded into the picker. Old-version lookup happens only when the dependency command reads an existing `pom.xml`.
 
 ## After creation
 
-Without handoff, the plugin opens generated application Java source when available, then falls back to a build file. Opening Java naturally triggers the user's normal filetype or JDTLS setup. The plugin does not configure JDTLS.
+Without handoff, the plugin opens generated application Java source when available, then falls back to a build file. Opening Java naturally triggers the user's normal `nvim-jdtls`, `nvim-java`, or other filetype setup. Duke supplies project and dependency workflow around that language-server experience; it does not install or configure JDTLS.
 
 Successful creation emits `User DukeProjectCreated` with `data.project_dir` and `data.entry_file`.
 
@@ -327,7 +333,7 @@ end)
 
 `create()` supports `maven`, `gradle`, and `spring`. `add()`, `upgrade()`, `outdated()`, and `remove()` provide the root Maven dependency lifecycle without UI. `upgrade_parent()` upgrades the Spring Boot parent version without UI, skipping the confirmation prompt since the API call itself is the confirmation; it refuses a non-Boot or property-backed parent the same way `:DukeBootUpgrade` does. `add_module()` adds a module to an existing Maven reactor without UI; unlike the command, `reactor_dir` is required with no current-working-directory fallback. See `:help duke-api` for exhaustive options, result fields, validation behavior, and partial outdated results.
 
-`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
+`require("duke").new()` opens the unified generator picker. `new_maven()`, `new_gradle()`, and `new_spring()` start individual wizards directly. `new_module()` starts the same `:DukeModule` wizard using the current working directory as the reactor. `dependency_tree()` and `dependency_why(coordinate)` open the read-only Maven insight views. `info(coordinate)` opens the `:DukeInfo` scratch buffer for a coordinate, or prompts for one without an argument. `add_dependency()`, `update_dependency()`, `upgrade_boot_parent()`, `outdated_dependencies()`, and `remove_dependency()` start the same nearest-`pom.xml` workflows as their commands. `clear_cache()` deletes all cached Initializr metadata and returns `true` on success.
 
 `require("duke").java_runtimes(opts)` returns discovered JDK homes for plugin or editor integration:
 
@@ -354,7 +360,7 @@ Active Java wins when eligible and `prefer_active` is not `false`; otherwise the
 
 ## Scope and limits
 
-V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, root-level Maven dependency add, upgrade, outdated inspection, and removal, Maven Central version info lookup, and Spring Boot parent version upgrade.
+V1 owns Maven, Gradle, and Spring project creation, adding a module to an existing Maven multi-module reactor, root-level Maven dependency add, upgrade, outdated inspection, and removal, resolved Maven tree and why-path inspection, Maven Central version info lookup, and Spring Boot parent version upgrade.
 
 The plugin deliberately does not run applications, format code, execute tests, edit Gradle dependencies, or manage JDTLS. Existing tools remain responsible for those jobs.
 

@@ -43,6 +43,14 @@ vim.api.nvim_create_user_command("DukeOutdated", function()
   require("duke").outdated_dependencies()
 end, { desc = "List outdated root pom.xml dependencies", force = true })
 
+vim.api.nvim_create_user_command("DukeTree", function()
+  require("duke").dependency_tree()
+end, { desc = "Show the resolved Maven dependency tree", force = true })
+
+vim.api.nvim_create_user_command("DukeWhy", function(opts)
+  require("duke").dependency_why(opts.args ~= "" and opts.args or nil)
+end, { desc = "Explain why a Maven dependency is present", nargs = "?", force = true })
+
 vim.api.nvim_create_user_command("DukeRemove", function()
   require("duke").remove_dependency()
 end, { desc = "Remove confirmed root pom.xml dependencies", force = true })

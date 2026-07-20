@@ -1316,6 +1316,106 @@ local function render_scratch(lines, title)
   })
 end
 
+local function run_dependency_insight(pom_path, coordinate)
+  local insight = require("duke.dependency_insight")
+  if coordinate then
+    coordinate = vim.trim(coordinate)
+    local coordinate_error = insight.coordinate_error(coordinate)
+    if coordinate_error then
+      notify_error("invalid coordinate '" .. coordinate .. "'; " .. coordinate_error)
+      return
+    end
+  end
+
+  local label = coordinate and ("Resolving why " .. coordinate .. " is present")
+    or "Resolving Maven dependency tree"
+  local progress = require("duke.progress").task(label)
+  local maven_config = require("duke.config").get().maven
+  insight.inspect(pom_path, coordinate, {
+    command = maven_config.command,
+    timeout = maven_config.timeout,
+  }, function(err, lines)
+    if err then
+      if coordinate and err:find("is not on the dependency tree", 1, true) then
+        progress:done()
+        notify(err)
+      else
+        progress:fail()
+        notify_error(err)
+      end
+      return
+    end
+    progress:done()
+    local title = coordinate and ("DukeWhy " .. coordinate) or "DukeTree"
+    render_scratch(lines, title)
+  end)
+end
+
+function M.dependency_tree()
+  local pom_path = nearest_pom()
+  if not pom_path then
+    notify_error("no pom.xml found in current directory or parents")
+    return
+  end
+  run_dependency_insight(pom_path)
+end
+
+local function input_dependency_why(pom_path)
+  require("duke.picker").input("Maven coordinate (groupId:artifactId): ", "", function(input)
+    if not input or vim.trim(input) == "" then
+      return
+    end
+    run_dependency_insight(pom_path, input)
+  end)
+end
+
+function M.dependency_why(coordinate)
+  local pom_path = nearest_pom()
+  if not pom_path then
+    notify_error("no pom.xml found in current directory or parents")
+    return
+  end
+  if coordinate then
+    run_dependency_insight(pom_path, coordinate)
+    return
+  end
+
+  local lines = read_pom(pom_path)
+  if not lines then
+    notify_error("cannot read " .. pom_path)
+    return
+  end
+  local dependencies, list_error = require("duke.pom").list(lines)
+  if list_error then
+    require("duke.log").add("WARN", "cannot seed :DukeWhy picker: " .. list_error)
+    input_dependency_why(pom_path)
+    return
+  end
+
+  local custom = { custom = true }
+  local choices = { custom }
+  vim.list_extend(choices, dependencies)
+  require("duke.picker").select_one(choices, {
+    prompt = "Why is this dependency present?",
+    default = custom,
+    format_item = function(item)
+      if item.custom then
+        return "Enter another coordinate..."
+      end
+      return item.group_id .. ":" .. item.artifact_id
+    end,
+  }, function(selected)
+    if not selected then
+      return
+    end
+    if selected.custom then
+      input_dependency_why(pom_path)
+      return
+    end
+    run_dependency_insight(pom_path, selected.group_id .. ":" .. selected.artifact_id)
+  end)
+end
+
 function M.help()
   render_scratch({
     "Duke commands",
@@ -1333,6 +1433,8 @@ function M.help()
     "  :DukeBootUpgrade  Upgrade Spring Boot parent",
     "  :DukeOutdated     Find outdated dependencies",
     "  :DukeRemove       Remove dependencies",
+    "  :DukeTree         Show the resolved dependency tree",
+    "  :DukeWhy          Explain why a dependency is present",
     "",
     "Inspect",
     "  :DukeInfo         Show Maven Central versions",

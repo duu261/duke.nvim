@@ -16,6 +16,7 @@ describe("plugin surface", function()
     vim.notify = original_notify
     package.loaded["duke.api"] = nil
     package.loaded["duke.config"] = nil
+    package.loaded["duke.dependency_insight"] = nil
     package.loaded["duke.gradle"] = nil
     package.loaded["duke.java"] = nil
     package.loaded["duke.log"] = nil
@@ -26,7 +27,9 @@ describe("plugin surface", function()
     package.loaded["duke.metadata"] = nil
     package.loaded["duke.picker"] = nil
     package.loaded["duke.pom"] = nil
+    package.loaded["duke.pom_file"] = nil
     package.loaded["duke.project"] = nil
+    package.loaded["duke.progress"] = nil
     package.loaded["duke.spring"] = nil
     vim.cmd.cd(vim.fn.fnameescape(original_cwd))
     for _, path in ipairs(temporary_directories) do
@@ -58,6 +61,8 @@ describe("plugin surface", function()
     assert.equals(2, vim.fn.exists(":DukeBootUpgrade"))
     assert.equals(2, vim.fn.exists(":DukeRemove"))
     assert.equals(2, vim.fn.exists(":DukeOutdated"))
+    assert.equals(2, vim.fn.exists(":DukeTree"))
+    assert.equals(2, vim.fn.exists(":DukeWhy"))
     assert.equals(2, vim.fn.exists(":DukeModule"))
     assert.equals(2, vim.fn.exists(":DukeClearCache"))
     assert.equals(2, vim.fn.exists(":DukeLog"))
@@ -2184,6 +2189,7 @@ describe("plugin surface", function()
     temporary_directories[#temporary_directories + 1] = cwd
     write_reactor_pom(cwd)
     vim.cmd.cd(vim.fn.fnameescape(cwd))
+    vim.cmd("enew!")
 
     local prompts = {}
     local received = {}
@@ -2222,7 +2228,9 @@ describe("plugin surface", function()
       notices[#notices + 1] = message
     end
 
+    vim.cmd("filetype off")
     require("duke").new_module()
+    vim.cmd("filetype on")
 
     assert.same(
       { "Artifact ID: ", "Package name: " },
@@ -2236,7 +2244,10 @@ describe("plugin surface", function()
     assert.equals("com.example.child", received.opts.package_name)
     assert.is_truthy(received.confirm:find("child", 1, true))
     assert.matches("Child%.java$", vim.api.nvim_buf_get_name(0))
-    assert.is_truthy(table.concat(notices, "\n"):find("module ready", 1, true))
+    assert.is_truthy(
+      table.concat(notices, "\n"):find("module ready", 1, true),
+      "notifications: " .. vim.inspect(notices)
+    )
     vim.cmd("bwipeout!")
   end)
 
@@ -2622,5 +2633,96 @@ describe("plugin surface", function()
 
     assert.equals(1, #notices)
     assert.is_truthy(notices[1]:find("invalid coordinate", 1, true))
+  end)
+
+  it("renders Maven dependency insight without changing the POM", function()
+    local pom_path = open_pom({
+      "<project>",
+      "  <dependencies>",
+      "    <dependency>",
+      "      <groupId>org.test</groupId>",
+      "      <artifactId>direct</artifactId>",
+      "      <version>1.0</version>",
+      "    </dependency>",
+      "  </dependencies>",
+      "</project>",
+    })
+    local original = vim.fn.readfile(pom_path)
+    local calls = {}
+    package.loaded["duke.dependency_insight"] = {
+      coordinate_error = function()
+        return nil
+      end,
+      inspect = function(received_pom, coordinate, opts, callback)
+        assert.equals("mvn", opts.command)
+        assert.equals(180000, opts.timeout)
+        calls[#calls + 1] = { received_pom, coordinate }
+        callback(nil, {
+          "com.example:demo:jar:1.0",
+          "\\- org.test:direct:jar:1.0:compile",
+        })
+      end,
+    }
+
+    require("duke").dependency_tree()
+    local tree_buf = vim.api.nvim_get_current_buf()
+    assert.is_false(vim.bo[tree_buf].modifiable)
+    assert.equals("duke", vim.bo[tree_buf].filetype)
+    assert.is_truthy(
+      table
+        .concat(vim.api.nvim_buf_get_lines(tree_buf, 0, -1, false), "\n")
+        :find("org.test:direct", 1, true)
+    )
+    vim.api.nvim_win_close(0, true)
+
+    require("duke").dependency_why("org.test:direct")
+    local why_buf = vim.api.nvim_get_current_buf()
+    assert.is_false(vim.bo[why_buf].modifiable)
+    vim.api.nvim_win_close(0, true)
+
+    assert.same({ { pom_path, nil }, { pom_path, "org.test:direct" } }, calls)
+    assert.same(original, vim.fn.readfile(pom_path))
+  end)
+
+  it("lets DukeWhy choose a root dependency or enter another coordinate", function()
+    local pom_path = open_pom({
+      "<project>",
+      "  <dependencies>",
+      "    <dependency>",
+      "      <groupId>org.test</groupId>",
+      "      <artifactId>direct</artifactId>",
+      "      <version>1.0</version>",
+      "    </dependency>",
+      "  </dependencies>",
+      "</project>",
+    })
+    local received
+    package.loaded["duke.dependency_insight"] = {
+      coordinate_error = function()
+        return nil
+      end,
+      inspect = function(received_pom, coordinate, opts, callback)
+        assert.equals(pom_path, received_pom)
+        assert.equals("mvn", opts.command)
+        received = coordinate
+        callback(nil, { "com.example:demo:jar:1.0", "\\- " .. coordinate .. ":jar:2.0" })
+      end,
+    }
+    package.loaded["duke.picker"] = {
+      select_one = function(items, opts, callback)
+        assert.equals("Why is this dependency present?", opts.prompt)
+        assert.equals("Enter another coordinate...", opts.format_item(items[1]))
+        assert.equals("org.test:direct", opts.format_item(items[2]))
+        callback(items[1])
+      end,
+      input = function(_, _, callback)
+        callback("org.transitive:item")
+      end,
+    }
+
+    require("duke").dependency_why()
+
+    assert.equals("org.transitive:item", received)
+    vim.api.nvim_win_close(0, true)
   end)
 end)

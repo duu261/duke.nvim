@@ -13,6 +13,8 @@ return {
     "DukeUpgrade",
     "DukeBootUpgrade",
     "DukeOutdated",
+    "DukeTree",
+    "DukeWhy",
     "DukeRemove",
     "DukeInfo",
     "DukeClearCache",
