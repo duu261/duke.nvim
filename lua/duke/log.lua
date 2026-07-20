@@ -14,7 +14,11 @@ function M.show()
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.bo[buffer].bufhidden = "wipe"
   vim.bo[buffer].filetype = "log"
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, false, entries)
+  local lines = {}
+  for _, entry in ipairs(entries) do
+    vim.list_extend(lines, vim.split(entry, "\n", { plain = true }))
+  end
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
   vim.cmd("botright split")
   vim.api.nvim_win_set_buf(0, buffer)
 end
